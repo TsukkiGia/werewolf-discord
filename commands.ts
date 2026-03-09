@@ -2,17 +2,15 @@
 // Run with: `node commands.js` (or `npm run register`).
 import 'dotenv/config';
 import { InstallGlobalCommands } from './utils.js';
+import type {SlashCommand} from './utils.js';
 
-const APP_ID = process.env.APP_ID;
+const APP_ID: string | undefined = process.env.APP_ID;
 
-if (!APP_ID) {
-  console.error('APP_ID must be set in the environment.');
-  process.exit(1);
-}
+
 
 // Define the application (slash) commands.
 // Names are the part after the leading slash, e.g. `/ww_create`.
-const WW_COMMANDS = [
+const WW_COMMANDS: SlashCommand[] = [
   {
     name: 'ww_create',
     description: 'Create a new Werewolf game',
@@ -31,6 +29,10 @@ const WW_COMMANDS = [
 ];
 
 async function main() {
+    if (!APP_ID) {
+    console.error('APP_ID must be set in the environment.');
+    process.exit(1);
+  }
   await InstallGlobalCommands(APP_ID, WW_COMMANDS);
   console.log('Successfully registered application commands.');
 }

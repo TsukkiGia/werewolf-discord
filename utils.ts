@@ -1,19 +1,36 @@
 import 'dotenv/config';
 
-export async function DiscordRequest(endpoint, options) {
+export interface DiscordRequestOptions extends Omit<RequestInit, 'body'> {
+  body?: unknown;
+}
+
+export interface SlashCommand {
+  name: string;
+  description: string;
+  // 1 = CHAT_INPUT
+  type: 1;
+}
+
+export async function DiscordRequest(
+  endpoint: string,
+  options: DiscordRequestOptions,
+): Promise<Response> {
   // append endpoint to root API URL
   const url = 'https://discord.com/api/v10/' + endpoint;
-  // Stringify payloads
-  if (options.body) options.body = JSON.stringify(options.body);
-  // Use fetch to make requests
-  const res = await fetch(url, {
+
+  const { body, ...rest } = options;
+  const init: RequestInit = {
     headers: {
       Authorization: `Bot ${process.env.DISCORD_TOKEN}`,
       'Content-Type': 'application/json; charset=UTF-8',
       'User-Agent': 'DiscordBot (https://github.com/TsukkiGia/werewolf-discord, 1.0.0)',
     },
-    ...options
-  });
+    ...rest,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  };
+
+  // Use fetch to make requests
+  const res = await fetch(url, init);
   // throw API errors
   if (!res.ok) {
     const data = await res.json();
@@ -24,7 +41,10 @@ export async function DiscordRequest(endpoint, options) {
   return res;
 }
 
-export async function InstallGlobalCommands(appId, commands) {
+export async function InstallGlobalCommands(
+  appId: string,
+  commands: SlashCommand[],
+): Promise<void> {
   // API endpoint to overwrite global commands
   const endpoint = `applications/${appId}/commands`;
 
