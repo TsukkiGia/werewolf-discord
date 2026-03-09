@@ -6,8 +6,6 @@ import type {SlashCommand} from './utils.js';
 
 const APP_ID: string | undefined = process.env.APP_ID;
 
-
-
 // Define the application (slash) commands.
 // Names are the part after the leading slash, e.g. `/ww_create`.
 const WW_COMMANDS: SlashCommand[] = [

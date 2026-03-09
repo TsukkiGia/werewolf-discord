@@ -3,25 +3,24 @@ import express from 'express';
 import {
   InteractionType,
   InteractionResponseType,
+  InteractionResponseFlags,
   verifyKeyMiddleware,
+  ButtonStyleTypes,
+  MessageComponentTypes,
 } from 'discord-interactions';
+
+type GameState = {
+  hostId: string;
+  players: Set<string>;
+};
 
 // Create an express app
 const app = express();
 // Get port, or default to 3000
 const PORT: number = Number(process.env.PORT) || 3000;
 
-// Middleware to expose rawBody for discord-interactions verification
-app.use(
-  express.json({
-    verify: (req: any, _res, buf) => {
-      (req as any).rawBody = buf.toString('utf-8');
-    },
-  }),
-);
-
 // Store for in-progress games. In production, you'd want to use a DB.
-const activeGames: Record<string, unknown> = {};
+const activeGames: Record<string, GameState> = {};
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests.
@@ -48,26 +47,59 @@ app.post(
     if (type === InteractionType.APPLICATION_COMMAND) {
       const { name } = data;
 
-      // "test" command
-      if (name === 'test') {
-        // TODO: implement /test command behavior
+      if (name === 'ww_create' && id) {
+        const context = req.body.context;
+        // User ID is in user field for (G)DMs, and member for servers
+        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+
+        const gameId = String(id);
+        activeGames[gameId] = {
+          hostId: userId,
+          players: new Set([userId]),
+        };
+
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: 'Test command not implemented yet.',
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+            components: [
+              {
+                type: MessageComponentTypes.TEXT_DISPLAY,
+                content: `Game started by <@${userId}>`,
+              },
+              {
+                type: MessageComponentTypes.ACTION_ROW,
+                components: [
+                      {
+                        type: MessageComponentTypes.BUTTON,
+                        // Append the game ID to use later on
+                        custom_id: `join_button_${gameId}`,
+                        label: 'Join',
+                        style: ButtonStyleTypes.PRIMARY,
+                      },
+                ],
+              },
+            ],
           },
         });
       }
 
-      // "challenge" command
-      if (name === 'challenge' && id) {
-        // TODO: implement /challenge command behavior and game setup
-        activeGames[id] = {};
-
+      if (name === 'ww_end') {
+        // TODO: implement end
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: 'Challenge command not implemented yet.',
+            content: 'End command not implemented yet.',
+          },
+        });
+      }
+
+      if (name === 'ww_help') {
+        // TODO: implement help
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: 'Help command not implemented yet.',
           },
         });
       }
@@ -80,31 +112,52 @@ app.post(
      * Handle requests from interactive components
      * (Specific UI and game behavior will be filled in later.)
      */
-    if (type === InteractionType.MESSAGE_COMPONENT) {
-      // custom_id set in payload when sending message component
-      const componentId: string = data.custom_id;
+      if (type === InteractionType.MESSAGE_COMPONENT) {
+        // custom_id set in payload when sending message component
+        const componentId: string = data.custom_id;
 
-      if (componentId.startsWith('accept_button_')) {
-        // TODO: implement accept button behavior
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: 'Accept button interaction not implemented yet.',
-          },
-        });
-      } else if (componentId.startsWith('select_choice_')) {
-        // TODO: implement choice selection behavior
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            content: 'Select choice interaction not implemented yet.',
-          },
-        });
+        if (componentId.startsWith('join_button_')) {
+          // get the associated game ID
+          const gameId = componentId.replace('join_button_', '');
+          const game = activeGames[gameId];
+
+          if (!game) {
+            return res.send({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                flags:
+                  InteractionResponseFlags.IS_COMPONENTS_V2 | InteractionResponseFlags.EPHEMERAL,
+                components: [
+                  {
+                    type: MessageComponentTypes.TEXT_DISPLAY,
+                    content: 'This game no longer exists.',
+                  },
+                ],
+              },
+            });
+          }
+
+          const context = req.body.context;
+          const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+          game.players.add(userId);
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              flags:
+                InteractionResponseFlags.IS_COMPONENTS_V2,
+              components: [
+                {
+                  type: MessageComponentTypes.TEXT_DISPLAY,
+                  content: `<@${userId}> joined the game.`,
+                },
+              ],
+            },
+          });
+        }
+
+        console.error(`unknown component: ${componentId}`);
+        return res.status(400).json({ error: 'unknown component' });
       }
-
-      console.error(`unknown component: ${componentId}`);
-      return res.status(400).json({ error: 'unknown component' });
-    }
 
     console.error('unknown interaction type', type);
     return res.status(400).json({ error: 'unknown interaction type' });
