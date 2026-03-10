@@ -8,19 +8,15 @@ import {
   ButtonStyleTypes,
   MessageComponentTypes,
 } from 'discord-interactions';
+import { initDb, createGame, addPlayer, getGame } from './db.js';
 
-type GameState = {
-  hostId: string;
-  players: Set<string>;
-};
+// Ensure database schema exists before handling traffic
+await initDb();
 
 // Create an express app
 const app = express();
 // Get port, or default to 3000
 const PORT: number = Number(process.env.PORT) || 3000;
-
-// Store for in-progress games. In production, you'd want to use a DB.
-const activeGames: Record<string, GameState> = {};
 
 /**
  * Interactions endpoint URL where Discord will send HTTP requests.
@@ -47,16 +43,23 @@ app.post(
     if (type === InteractionType.APPLICATION_COMMAND) {
       const { name } = data;
 
-      if (name === 'ww_create' && id) {
-        const context = req.body.context;
-        // User ID is in user field for (G)DMs, and member for servers
-        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+	      if (name === 'ww_create' && id) {
+	        const context = req.body.context;
+	        // User ID is in user field for (G)DMs, and member for servers
+	        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
 
-        const gameId = String(id);
-        activeGames[gameId] = {
-          hostId: userId,
-          players: new Set([userId]),
-        };
+	        const gameId = String(id);
+	        const guildId: string | null = req.body.guild_id ?? null;
+	        const channelId: string | null = req.body.channel?.id ?? null;
+
+	        // Persist game and host player in the database
+	        await createGame({
+	          id: gameId,
+	          guildId,
+	          channelId,
+	          hostId: userId,
+	        });
+	        await addPlayer(gameId, userId);
 
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -112,48 +115,48 @@ app.post(
      * Handle requests from interactive components
      * (Specific UI and game behavior will be filled in later.)
      */
-      if (type === InteractionType.MESSAGE_COMPONENT) {
-        // custom_id set in payload when sending message component
-        const componentId: string = data.custom_id;
+	      if (type === InteractionType.MESSAGE_COMPONENT) {
+	        // custom_id set in payload when sending message component
+	        const componentId: string = data.custom_id;
 
-        if (componentId.startsWith('join_button_')) {
-          // get the associated game ID
-          const gameId = componentId.replace('join_button_', '');
-          const game = activeGames[gameId];
+	        if (componentId.startsWith('join_button_')) {
+	          // get the associated game ID
+	          const gameId = componentId.replace('join_button_', '');
+	          const game = await getGame(gameId);
 
-          if (!game) {
-            return res.send({
-              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-              data: {
-                flags:
-                  InteractionResponseFlags.IS_COMPONENTS_V2 | InteractionResponseFlags.EPHEMERAL,
-                components: [
-                  {
-                    type: MessageComponentTypes.TEXT_DISPLAY,
-                    content: 'This game no longer exists.',
-                  },
-                ],
-              },
-            });
-          }
+	          if (!game) {
+	            return res.send({
+	              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+	              data: {
+	                flags:
+	                  InteractionResponseFlags.IS_COMPONENTS_V2 | InteractionResponseFlags.EPHEMERAL,
+	                components: [
+	                  {
+	                    type: MessageComponentTypes.TEXT_DISPLAY,
+	                    content: 'This game no longer exists.',
+	                  },
+	                ],
+	              },
+	            });
+	          }
 
-          const context = req.body.context;
-          const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
-          game.players.add(userId);
-          return res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-            data: {
-              flags:
-                InteractionResponseFlags.IS_COMPONENTS_V2,
-              components: [
-                {
-                  type: MessageComponentTypes.TEXT_DISPLAY,
-                  content: `<@${userId}> joined the game.`,
-                },
-              ],
-            },
-          });
-        }
+	          const context = req.body.context;
+	          const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+	          await addPlayer(gameId, userId);
+	          return res.send({
+	            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+	            data: {
+	              flags:
+	                InteractionResponseFlags.IS_COMPONENTS_V2,
+	              components: [
+	                {
+	                  type: MessageComponentTypes.TEXT_DISPLAY,
+	                  content: `<@${userId}> joined the game.`,
+	                },
+	              ],
+	            },
+	          });
+	        }
 
         console.error(`unknown component: ${componentId}`);
         return res.status(400).json({ error: 'unknown component' });
