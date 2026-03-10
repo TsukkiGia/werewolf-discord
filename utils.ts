@@ -4,11 +4,21 @@ export interface DiscordRequestOptions extends Omit<RequestInit, 'body'> {
   body?: unknown;
 }
 
+export interface SlashCommandOption {
+  name: string;
+  description: string;
+  // See https://discord.com/developers/docs/interactions/application-commands#application-command-object-application-command-types
+  // 3 = STRING, 6 = USER, etc.
+  type: number;
+  required?: boolean;
+}
+
 export interface SlashCommand {
   name: string;
   description: string;
   // 1 = CHAT_INPUT
   type: 1;
+  options?: SlashCommandOption[];
 }
 
 export async function DiscordRequest(

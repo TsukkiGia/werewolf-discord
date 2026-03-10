@@ -15,13 +15,15 @@ function shuffle<T>(items: T[]): T[] {
 export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
   if (playerIds.length === 0) return [];
 
-  const shuffledPlayers = shuffle(playerIds);
-  const setup = chooseSetup(shuffledPlayers.length);
+  // For now, do not randomize order: the first joined player
+  // (as provided by the caller) will get the first role in the setup.
+  // const shuffledPlayers = shuffle(playerIds);
+  const setup = chooseSetup(playerIds.length);
 
   const assignments: AssignedRole[] = [];
 
-  for (let i = 0; i < shuffledPlayers.length; i += 1) {
-    const userId = shuffledPlayers[i]!;
+  for (let i = 0; i < playerIds.length; i += 1) {
+    const userId = playerIds[i]!;
     const role = setup[i];
     if (!role) {
       throw new Error('chooseSetup did not return enough roles for all players');

@@ -33,3 +33,13 @@ CREATE TABLE IF NOT EXISTS night_actions (
   UNIQUE (game_id, night, actor_id)
 );
 
+CREATE TABLE IF NOT EXISTS day_votes (
+  id SERIAL PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  day INTEGER NOT NULL,
+  voter_id TEXT NOT NULL,
+  target_id TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  UNIQUE (game_id, day, voter_id)
+);
+

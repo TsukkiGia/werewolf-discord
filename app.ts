@@ -25,11 +25,15 @@ import {
   recordNightAction,
   processSeerActions,
   processDoctorActions,
+  recordDayVote,
+  getVotesForDay,
 } from './db.js';
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
-import { dmRolesAndNightActions } from './game/engine/dmRoles.js';
+import { dmRolesAndNightActions, dmDayVotePrompts } from './game/engine/dmRoles.js';
 import { chooseKillVictim } from './game/engine/nightResolution.js';
+import { chooseLynchVictim } from './game/engine/dayResolution.js';
+import { evaluateWinCondition } from './game/engine/winConditions.js';
 
 async function maybeResolveNight(gameId: string): Promise<void> {
   try {
@@ -111,8 +115,81 @@ async function maybeResolveNight(gameId: string): Promise<void> {
         console.error('Failed to send day summary message', err);
       }
     }
+
+    // After announcing dawn, DM alive players with a day-vote menu.
+    try {
+      const playersAfterNight = await getPlayersForGame(gameId);
+      await dmDayVotePrompts({ game, players: playersAfterNight });
+    } catch (err) {
+      console.error('Failed to DM day vote prompts', err);
+    }
   } catch (err) {
     console.error('Error resolving night phase', err);
+  }
+}
+
+async function maybeResolveDay(gameId: string): Promise<void> {
+  try {
+    const game = await getGame(gameId);
+    if (!game || game.status !== 'day') {
+      return;
+    }
+
+    const dayNumber = 1; // TODO: support multiple days
+
+    const players = await getPlayersForGame(gameId);
+    const votes = await getVotesForDay(gameId, dayNumber);
+
+    const lynchId = chooseLynchVictim(players, votes);
+    if (!lynchId) {
+      return; // no majority yet
+    }
+
+    const lynched = players.find((p) => p.user_id === lynchId);
+    if (!lynched || !lynched.is_alive) {
+      return;
+    }
+
+    await markPlayerDead(gameId, lynchId);
+
+    // Re-read players after the lynch to evaluate win conditions.
+    const updatedPlayers = await getPlayersForGame(gameId);
+    const win = evaluateWinCondition(updatedPlayers);
+
+    if (game.channel_id) {
+      const lines: string[] = [
+        `Day vote results: <@${lynchId}> was lynched. They were a **${lynched.role}**.`,
+      ];
+
+      if (win) {
+        lines.push(
+          win.winner === 'town'
+            ? 'Town has eliminated all werewolves. Town wins!'
+            : 'Wolves now control the village. Wolves win!',
+        );
+      } else {
+        lines.push('Night falls...');
+      }
+
+      try {
+        await DiscordRequest(`channels/${game.channel_id}/messages`, {
+          method: 'POST',
+          body: { content: lines.join('\n') },
+        });
+      } catch (err) {
+        console.error('Failed to send day resolution message', err);
+      }
+    }
+
+    if (win) {
+      await endGame(gameId);
+      return;
+    }
+
+    // No winner yet: advance to the next phase (day -> night).
+    await advancePhase(gameId);
+  } catch (err) {
+    console.error('Error resolving day phase', err);
   }
 }
 
@@ -449,6 +526,88 @@ app.post(
           // After acknowledging the interaction, attempt to resolve the night.
           // This will only advance to day once all required night-action roles have acted.
           void maybeResolveNight(gameId);
+          return;
+        } else if (componentId.startsWith('day_vote:')) {
+          const gameId = componentId.replace('day_vote:', '');
+          const game = await getGame(gameId);
+
+          if (!game) {
+            return res.status(400).json({ error: 'game not found for day vote' });
+          }
+
+          if (game.status !== 'day') {
+            return res.send({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                content: 'You can only vote during the day.',
+              },
+            });
+          }
+
+          const actorId = req.body.member?.user?.id ?? req.body.user?.id;
+
+          if (!actorId) {
+            return res.status(400).json({ error: 'missing voter id' });
+          }
+
+          const players = await getPlayersForGame(game.id);
+          const alivePlayers = players.filter((p) => p.is_alive);
+          const aliveIds = new Set(alivePlayers.map((p) => p.user_id));
+
+          if (!aliveIds.has(actorId)) {
+            return res.send({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                content: 'Only alive players in the game can vote.',
+              },
+            });
+          }
+
+          const targetId: string | null =
+            Array.isArray(data.values) && data.values.length > 0 ? data.values[0] : null;
+
+          if (!targetId || !aliveIds.has(targetId)) {
+            return res.send({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                content:
+                  'You must vote for a living player who is part of this game.',
+              },
+            });
+          }
+
+          // Record or update the player’s vote for this day.
+          await recordDayVote({
+            gameId: game.id,
+            day: 1,
+            voterId: actorId,
+            targetId,
+          });
+
+          // Acknowledge in the DM.
+          res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: `Your vote to lynch <@${targetId}> has been recorded.`,
+            },
+          });
+
+          // Also announce in the game channel.
+          if (game.channel_id) {
+            try {
+              await DiscordRequest(`channels/${game.channel_id}/messages`, {
+                method: 'POST',
+                body: {
+                  content: `<@${actorId}> votes to lynch <@${targetId}>.`,
+                },
+              });
+            } catch (err) {
+              console.error('Failed to send day vote announcement', err);
+            }
+          }
+
+          // Attempt to resolve the day based on current votes.
+          void maybeResolveDay(game.id);
           return;
         }
 
