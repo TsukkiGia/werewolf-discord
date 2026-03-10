@@ -6,4 +6,9 @@ export const WerewolfRole: RoleDefinition = {
   description: 'A werewolf who hunts at night and tries to avoid suspicion during the day.',
   dmIntro:
     'You are a WEREWOLF. Your goal is to eliminate the villagers without being discovered.',
+  nightAction: {
+    kind: 'kill',
+    target: 'player',
+    canTargetSelf: false,
+  },
 };
