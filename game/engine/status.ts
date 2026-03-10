@@ -25,3 +25,17 @@ export function buildStatusLines(game: GameRow, players: GamePlayerState[]): str
   ];
 }
 
+/** Standard text shown when a day starts. */
+export function buildDayStartLine(dayNumber: number): string {
+  return `Day ${dayNumber} begins. You have 1 minute to discuss before voting starts.`;
+}
+
+/** Standard text shown when night begins. */
+export function buildNightFallsLine(): string {
+  return 'Night falls...';
+}
+
+/** Standard text for a no-lynch end of day. */
+export function buildNoLynchLine(dayNumber: number): string {
+  return `Day ${dayNumber} ends with no majority. No one is lynched.`;
+}

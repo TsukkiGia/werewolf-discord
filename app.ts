@@ -40,7 +40,12 @@ import {
 import { chooseKillVictim, evaluateNightResolution } from './game/engine/nightResolution.js';
 import { evaluateDayResolution } from './game/engine/dayResolution.js';
 import { evaluateWinCondition, buildWinLines } from './game/engine/winConditions.js';
-import { buildStatusLines } from './game/engine/status.js';
+import {
+  buildStatusLines,
+  buildDayStartLine,
+  buildNightFallsLine,
+  buildNoLynchLine,
+} from './game/engine/status.js';
 import { getInteractionUserId, getGuildAndChannelIds } from './interactionHelpers.js';
 
 function scheduleDayVoting(gameId: string, dayNumber: number): void {
@@ -120,9 +125,7 @@ async function maybeResolveNight(gameId: string): Promise<void> {
       if (win) {
         lines.push(...buildWinLines(win));
       } else {
-        lines.push(
-          `Day ${upcomingDay} begins. You have 1 minute to discuss before voting starts.`,
-        );
+        lines.push(buildDayStartLine(upcomingDay));
       }
 
       try {
@@ -189,8 +192,8 @@ async function maybeResolveDay(gameId: string): Promise<void> {
     if (resolution.state === 'no_lynch') {
       if (game.channel_id) {
         const lines: string[] = [
-          `Day ${dayNumber} ends with no majority. No one is lynched.`,
-          'Night falls...',
+          buildNoLynchLine(dayNumber),
+          buildNightFallsLine(),
         ];
 
         try {
@@ -228,7 +231,7 @@ async function maybeResolveDay(gameId: string): Promise<void> {
       if (win) {
         lines.push(...buildWinLines(win));
       } else {
-        lines.push('Night falls...');
+        lines.push(buildNightFallsLine());
       }
 
       try {
