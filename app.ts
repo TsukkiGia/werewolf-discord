@@ -36,6 +36,7 @@ import { dmRolesAndNightActions, startDayVoting } from './game/engine/dmRoles.js
 import { chooseKillVictim } from './game/engine/nightResolution.js';
 import { chooseLynchVictim } from './game/engine/dayResolution.js';
 import { evaluateWinCondition } from './game/engine/winConditions.js';
+import { buildStatusLines } from './game/engine/status.js';
 
 function scheduleDayVoting(gameId: string, dayNumber: number): void {
   // In-memory timer: if the process restarts, the scheduled call is lost.
@@ -407,28 +408,7 @@ app.post(
         }
 
         const players = await getPlayersForGame(game.id);
-
-        const phaseLine =
-          game.status === 'night'
-            ? `Phase: night (Night ${game.current_night || 1})`
-            : game.status === 'day'
-              ? `Phase: day (Day ${game.current_day || 1})`
-              : `Phase: ${game.status}`;
-
-        const playerLines =
-          players.length > 0
-            ? players
-                .map((p) => `${p.is_alive ? '🟢' : '⚫️'} <@${p.user_id}>`)
-                .join('\n')
-            : 'No players have joined yet.';
-
-        const messageLines = [
-          `Game status for this channel:`,
-          phaseLine,
-          `Host: <@${game.host_id}>`,
-          `Players (${players.length}):`,
-          playerLines,
-        ];
+        const messageLines = buildStatusLines(game, players);
 
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
