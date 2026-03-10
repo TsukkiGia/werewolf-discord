@@ -15,6 +15,7 @@ import {
   getGame,
   getActiveGameForChannel,
   getPlayerIdsForGame,
+  endGame,
 } from './db.js';
 
 // Ensure database schema exists before handling traffic
@@ -59,6 +60,18 @@ app.post(
 	        const guildId: string | null = req.body.guild_id ?? null;
 	        const channelId: string | null = req.body.channel?.id ?? null;
 
+	        // Enforce only one active game per channel
+	        const existingGame = await getActiveGameForChannel(guildId, channelId);
+	        if (existingGame) {
+	          return res.send({
+	            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+	            data: {
+	              flags: InteractionResponseFlags.EPHEMERAL,
+	              content: `There is already an active Werewolf game in this channel started by <@${existingGame.host_id}>.`,
+	            },
+	          });
+	        }
+
 	        // Persist game and host player in the database
 	        await createGame({
 	          id: gameId,
@@ -95,11 +108,40 @@ app.post(
       }
 
       if (name === 'ww_end') {
-        // TODO: implement end
+        const guildId: string | null = req.body.guild_id ?? null;
+        const channelId: string | null = req.body.channel?.id ?? null;
+
+        const game = await getActiveGameForChannel(guildId, channelId);
+
+        if (!game) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              flags: InteractionResponseFlags.EPHEMERAL,
+              content: 'There is no active Werewolf game in this channel to end.',
+            },
+          });
+        }
+
+        const context = req.body.context;
+        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+
+        if (userId !== game.host_id) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              flags: InteractionResponseFlags.EPHEMERAL,
+              content: `Only the host <@${game.host_id}> can end this game.`,
+            },
+          });
+        }
+
+        await endGame(game.id);
+
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: 'End command not implemented yet.',
+            content: `The Werewolf game in this channel has been ended by <@${userId}>.`,
           },
         });
       }

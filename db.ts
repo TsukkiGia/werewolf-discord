@@ -124,3 +124,16 @@ export async function getPlayerIdsForGame(gameId: string): Promise<string[]> {
   return result.rows.map((row) => row.user_id);
 }
 
+export async function endGame(gameId: string): Promise<void> {
+  const endedAt = Date.now();
+  await pool.query(
+    `
+    UPDATE games
+    SET status = $1,
+        ended_at = $2
+    WHERE id = $3
+    `,
+    ['ended', endedAt, gameId],
+  );
+}
+
