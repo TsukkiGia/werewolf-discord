@@ -361,11 +361,30 @@ app.post(
       }
 
       if (name === 'ww_help') {
-        // TODO: implement help
+        const helpLines: string[] = [
+          '**Werewolf bot help**',
+          '',
+          '**Commands:**',
+          '• `/ww_create` – Start a new game in this channel and become the host.',
+          '• `/ww_start` – Host-only; assign roles and begin Night 1.',
+          '• `/ww_status` – Show the current phase, day/night number, and players.',
+          '• `/ww_end` – Host-only; end the current game in this channel.',
+          '',
+          '**How it works:**',
+          '1. Host runs `/ww_create`, other players click **Join**.',
+          '2. Host runs `/ww_start` to assign roles and start Night 1.',
+          '3. Everyone receives a DM with their role. Roles with night actions (werewolf, seer, doctor) also get a DM menu to choose a target.',
+          '4. When all required night actions are submitted, night resolves automatically.',
+          '5. At dawn, the bot announces any deaths, then gives the channel 1 minute to discuss.',
+          '6. After 1 minute, alive players receive a DM to vote on a lynch. Votes are announced in the channel and resolve automatically when there is a majority.',
+          '',
+          'The game ends automatically when either all wolves are dead (town wins) or only wolves are left alive (wolves win).',
+        ];
+
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: 'Help command not implemented yet.',
+            content: helpLines.join('\n'),
           },
         });
       }
