@@ -21,12 +21,13 @@ export async function recordNightAction(params: {
   targetId: string | null;
   actionKind: NightActionKind;
   role: RoleName;
-}): Promise<void> {
+}): Promise<boolean> {
   const createdAt = Date.now();
-  await pool.query(
+  const result = await pool.query(
     `
     INSERT INTO night_actions (game_id, night, actor_id, target_id, action_kind, role, created_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    ON CONFLICT (game_id, night, actor_id) DO NOTHING
     `,
     [
       params.gameId,
@@ -38,6 +39,7 @@ export async function recordNightAction(params: {
       createdAt,
     ],
   );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function hasNightAction(

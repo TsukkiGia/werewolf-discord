@@ -14,15 +14,17 @@ export async function recordDayVote(params: {
   day: number;
   voterId: string;
   targetId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const createdAt = Date.now();
-  await pool.query(
+  const result = await pool.query(
     `
     INSERT INTO day_votes (game_id, day, voter_id, target_id, created_at)
     VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (game_id, day, voter_id) DO NOTHING
     `,
     [params.gameId, params.day, params.voterId, params.targetId, createdAt],
   );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function hasDayVote(
