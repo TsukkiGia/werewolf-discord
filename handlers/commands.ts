@@ -242,7 +242,7 @@ export async function handleWwStart(req: any, res: any): Promise<any> {
   const playersForTargets = await getPlayersForGame(game.id);
   const aliveTargetIds = playersForTargets.filter((p) => p.is_alive).map((p) => p.user_id);
 
-  await dmRolesAndNightActions({ game, playerIds: aliveTargetIds, assignments });
+  await dmRolesAndNightActions({ game, playerIds: aliveTargetIds, assignments, nightNumber: 1 });
   await scheduleNightTimeout(game.id, 1); // startGame increments current_night 0 → 1
 
   const playersText =

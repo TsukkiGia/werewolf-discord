@@ -47,6 +47,15 @@ CREATE TABLE IF NOT EXISTS night_actions (
   UNIQUE (game_id, night, actor_id)
 );
 
+CREATE TABLE IF NOT EXISTS night_action_prompts (
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  night INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  PRIMARY KEY (game_id, night, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS day_votes (
   id SERIAL PRIMARY KEY,
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,

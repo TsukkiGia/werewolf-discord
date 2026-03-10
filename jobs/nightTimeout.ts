@@ -1,7 +1,18 @@
 import { type Job } from 'pg-boss';
 import { boss } from './dayVoting.js';
-import { getGame, getPlayersForGame, getNightActionsForNight, recordNightAction } from '../db.js';
+import {
+  getGame,
+  getPlayersForGame,
+  getNightActionsForNight,
+  recordNightAction,
+  getNightActionPromptsForNight,
+} from '../db.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
+import { DiscordRequest } from '../utils.js';
+import {
+  InteractionResponseFlags,
+  MessageComponentTypes,
+} from 'discord-interactions';
 
 type NightTimeoutData = { gameId: string; nightNumber: number };
 
@@ -53,6 +64,46 @@ export async function registerNightWorker(
       );
     }
     await Promise.all(timeoutActionPromises);
+
+    // After submitting timeout actions, update any outstanding night-action prompts
+    // to show that time has elapsed so players can no longer act.
+    try {
+      const prompts = await getNightActionPromptsForNight(gameId, nightNumber);
+      const patchPromises = prompts
+        .filter((prompt) => !actedIds.has(prompt.user_id))
+        .map(async (prompt) => {
+          try {
+            await DiscordRequest(
+              `channels/${prompt.channel_id}/messages/${prompt.message_id}`,
+              {
+                method: 'PATCH',
+                body: {
+                  flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+                  components: [
+                    {
+                      type: MessageComponentTypes.TEXT_DISPLAY,
+                      content:
+                        'Time has elapsed. You can no longer submit a night action for this night.',
+                    },
+                  ],
+                },
+              },
+            );
+          } catch (err) {
+            console.error(
+              'Failed to patch expired night action prompt',
+              gameId,
+              nightNumber,
+              prompt.user_id,
+              err,
+            );
+          }
+        });
+
+      await Promise.all(patchPromises);
+    } catch (err) {
+      console.error('Error updating expired night action prompts', err);
+    }
 
     await onResolve(gameId);
   });

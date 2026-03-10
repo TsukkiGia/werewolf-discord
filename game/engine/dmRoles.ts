@@ -7,6 +7,7 @@ import type { GameRow } from '../../db/games.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
 import { DiscordRequest } from '../../utils.js';
+import { recordNightActionPrompt } from '../../db/nightActions.js';
 
 // Cache display names per user ID for the lifetime of the process so we don't
 // spam the Discord API (and hit rate limits) when building option lists.
@@ -56,8 +57,9 @@ export async function dmRolesAndNightActions(params: {
   game: GameRow;
   playerIds: string[];
   assignments: AssignedRole[];
+  nightNumber: number;
 }): Promise<void> {
-  const { game, playerIds, assignments } = params;
+  const { game, playerIds, assignments, nightNumber } = params;
 
   await Promise.all(
     assignments.map(async (assignment) => {
@@ -75,7 +77,10 @@ export async function dmRolesAndNightActions(params: {
 
         const components: any[] = [];
 
-        if (def.nightAction.target === 'player' && def.nightAction.kind !== 'none') {
+        const hasNightAction =
+          def.nightAction.target === 'player' && def.nightAction.kind !== 'none';
+
+        if (hasNightAction) {
           const options = await Promise.all(
             playerIds
               .filter((id: string) =>
@@ -104,26 +109,42 @@ export async function dmRolesAndNightActions(params: {
           }
         }
 
-        await DiscordRequest(`channels/${dmChannel.id}/messages`, {
-          method: 'POST',
-          body: components.length
-            ? {
-                // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
-                // not the legacy `content` field.
-                flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-                components: [
-                  {
-                    type: MessageComponentTypes.TEXT_DISPLAY,
-                    content: baseContent,
-                  },
-                  ...components,
-                ],
-              }
-            : {
-                // No components v2 here, so plain content is fine.
-                content: baseContent,
-              },
-        });
+        if (components.length && hasNightAction) {
+          const msgRes = await DiscordRequest(`channels/${dmChannel.id}/messages`, {
+            method: 'POST',
+            body: {
+              // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
+              // not the legacy `content` field.
+              flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+              components: [
+                {
+                  type: MessageComponentTypes.TEXT_DISPLAY,
+                  content: baseContent,
+                },
+                ...components,
+              ],
+            },
+          });
+
+          const msg = (await msgRes.json()) as { id?: string };
+          if (msg.id) {
+            await recordNightActionPrompt({
+              gameId: game.id,
+              night: nightNumber,
+              userId: assignment.userId,
+              channelId: dmChannel.id,
+              messageId: msg.id,
+            });
+          }
+        } else {
+          await DiscordRequest(`channels/${dmChannel.id}/messages`, {
+            method: 'POST',
+            body: {
+              // No components v2 here, so plain content is fine.
+              content: baseContent,
+            },
+          });
+        }
       } catch (err) {
         console.error('Failed to DM role to user', assignment.userId, err);
       }
@@ -164,7 +185,8 @@ export async function dmNightActionsForAlivePlayers(params: {
 
   if (assignments.length === 0) return;
 
-  await dmRolesAndNightActions({ game, playerIds: targetIds, assignments });
+  const nightNumber = game.current_night || 1;
+  await dmRolesAndNightActions({ game, playerIds: targetIds, assignments, nightNumber });
 }
 
 export async function dmDayVotePrompts(params: {
