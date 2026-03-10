@@ -13,6 +13,7 @@ export interface GameRow {
   ended_at: number | null;
   current_day: number;
   current_night: number;
+  join_message_id: string | null;
 }
 
 export async function createGame(params: {
@@ -35,6 +36,17 @@ export async function createGame(params: {
 export async function getGame(id: string): Promise<GameRow | null> {
   const result = await pool.query<GameRow>('SELECT * FROM games WHERE id = $1', [id]);
   return result.rows[0] ?? null;
+}
+
+export async function setJoinMessageId(gameId: string, messageId: string): Promise<void> {
+  await pool.query(
+    `
+    UPDATE games
+    SET join_message_id = $1
+    WHERE id = $2
+    `,
+    [messageId, gameId],
+  );
 }
 
 export async function getActiveGameForChannel(

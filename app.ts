@@ -22,6 +22,7 @@ import {
   markPlayerDead,
   getNightActionsForNight,
   advancePhase,
+  setJoinMessageId,
   recordNightAction,
   processSeerActions,
   processDoctorActions,
@@ -47,6 +48,15 @@ import {
   buildNoLynchLine,
 } from './game/engine/status.js';
 import { getInteractionUserId, getGuildAndChannelIds } from './interactionHelpers.js';
+
+function buildJoinClosedComponents(): any[] {
+  return [
+    {
+      type: MessageComponentTypes.TEXT_DISPLAY,
+      content: 'This game is already in progress or has ended. Joining is closed.',
+    },
+  ];
+}
 
 function scheduleDayVoting(gameId: string, dayNumber: number): void {
   // In-memory timer: if the process restarts, the scheduled call is lost.
@@ -319,30 +329,49 @@ app.post(
 	        });
 	        await addPlayer(gameId, userId);
 
-        return res.send({
-          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-          data: {
-            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-            components: [
-              {
-                type: MessageComponentTypes.TEXT_DISPLAY,
-                content: `Game started by <@${userId}>`,
-              },
-              {
-                type: MessageComponentTypes.ACTION_ROW,
-                components: [
-                      {
-                        type: MessageComponentTypes.BUTTON,
-                        // Append the game ID to use later on
-                        custom_id: `join_button_${gameId}`,
-                        label: 'Join',
-                        style: ButtonStyleTypes.PRIMARY,
-                      },
-                ],
-              },
-            ],
-          },
-        });
+          // Post the visible game message with a Join button and store its ID.
+          if (channelId) {
+            try {
+              const msgRes = await DiscordRequest(`channels/${channelId}/messages`, {
+                method: 'POST',
+                body: {
+                  flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+                  components: [
+                    {
+                      type: MessageComponentTypes.TEXT_DISPLAY,
+                      content: `Game started by <@${userId}>`,
+                    },
+                    {
+                      type: MessageComponentTypes.ACTION_ROW,
+                      components: [
+                        {
+                          type: MessageComponentTypes.BUTTON,
+                          custom_id: `join_button_${gameId}`,
+                          label: 'Join',
+                          style: ButtonStyleTypes.PRIMARY,
+                        },
+                      ],
+                    },
+                  ],
+                },
+              });
+
+              const created = (await msgRes.json()) as { id?: string };
+              if (created.id) {
+                await setJoinMessageId(gameId, created.id);
+              }
+            } catch (err) {
+              console.error('Failed to send join message for new game', err);
+            }
+          }
+
+          // Acknowledge the slash command (no components here).
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: `Created a new Werewolf game in this channel. Players can click **Join** to participate.`,
+            },
+          });
       }
 
       if (name === 'ww_end') {
@@ -477,6 +506,25 @@ app.post(
 
         const assignments = await assignRolesForGame(game.id);
 
+        // Before moving out of the lobby, patch the original Join message (if any)
+        // to remove the Join button and show that joining is closed.
+        if (game.channel_id && game.join_message_id) {
+          try {
+            await DiscordRequest(
+              `channels/${game.channel_id}/messages/${game.join_message_id}`,
+              {
+                method: 'PATCH',
+                body: {
+                  flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+                  components: buildJoinClosedComponents(),
+                },
+              },
+            );
+          } catch (err) {
+            console.error('Failed to patch join message on game start', err);
+          }
+        }
+
         await startGame(game.id);
 
         // Re-read players to know who is alive; night-action target lists should only
@@ -494,10 +542,24 @@ app.post(
             ? playerIds.map((id: string) => `<@${id}>`).join(', ')
             : 'No players (this should not happen).';
 
+        // Announce in the channel that the game has started.
+        if (game.channel_id) {
+          try {
+            await DiscordRequest(`channels/${game.channel_id}/messages`, {
+              method: 'POST',
+              body: {
+                content: `The Werewolf game has started!\nHost: <@${game.host_id}>\nPlayers: ${playersText}`,
+              },
+            });
+          } catch (err) {
+            console.error('Failed to send game started message', err);
+          }
+        }
+
         return res.send({
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
-            content: `The Werewolf game has started!\nHost: <@${game.host_id}>\nPlayers: ${playersText}`,
+            content: 'The Werewolf game has been started.',
           },
         });
       }
@@ -521,16 +583,27 @@ app.post(
 
 	          if (!game) {
 	            return res.send({
-	              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+	              type: InteractionResponseType.UPDATE_MESSAGE,
 	              data: {
-	                flags:
-	                  InteractionResponseFlags.IS_COMPONENTS_V2,
+	                flags: InteractionResponseFlags.IS_COMPONENTS_V2,
 	                components: [
 	                  {
 	                    type: MessageComponentTypes.TEXT_DISPLAY,
 	                    content: 'This game no longer exists.',
 	                  },
 	                ],
+	              },
+	            });
+	          }
+
+	          // Once a game leaves the lobby, do not allow further joins,
+	          // and update the original message to remove the Join button.
+	          if (game.status !== 'lobby') {
+	            return res.send({
+	              type: InteractionResponseType.UPDATE_MESSAGE,
+	              data: {
+	                flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+	                components: buildJoinClosedComponents(),
 	              },
 	            });
 	          }
