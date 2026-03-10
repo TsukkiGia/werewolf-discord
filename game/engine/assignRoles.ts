@@ -14,9 +14,7 @@ function shuffle<T>(items: T[]): T[] {
 
 export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
   if (playerIds.length === 0) return [];
-
-  // For now, do not randomize order: the first joined player
-  // (as provided by the caller) will get the first role in the setup.
+  
   const shuffledPlayers = shuffle(playerIds);
   const setup = chooseSetup(playerIds.length);
 

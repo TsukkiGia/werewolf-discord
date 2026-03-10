@@ -12,6 +12,31 @@ export interface WinResult {
 }
 
 /**
+ * Build the standard win message lines shown in the channel when the
+ * game ends, including revealing the wolves.
+ */
+export function buildWinLines(win: WinResult): string[] {
+  const lines: string[] = [];
+
+  const wolfMentions =
+    win.wolves.length > 0
+      ? win.wolves.map((p) => `<@${p.user_id}>`).join(', ')
+      : null;
+
+  lines.push(
+    win.winner === 'town'
+      ? 'Town has eliminated all werewolves. Town wins!'
+      : 'Wolves now control the village. Wolves win!',
+  );
+
+  if (wolfMentions) {
+    lines.push(`The werewolves were: ${wolfMentions}.`);
+  }
+
+  return lines;
+}
+
+/**
  * Evaluate the win condition for a Werewolf game based on the current
  * set of players.
  *

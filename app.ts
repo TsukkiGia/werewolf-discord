@@ -39,7 +39,7 @@ import {
 } from './game/engine/dmRoles.js';
 import { chooseKillVictim, evaluateNightResolution } from './game/engine/nightResolution.js';
 import { evaluateDayResolution } from './game/engine/dayResolution.js';
-import { evaluateWinCondition } from './game/engine/winConditions.js';
+import { evaluateWinCondition, buildWinLines } from './game/engine/winConditions.js';
 import { buildStatusLines } from './game/engine/status.js';
 import { getInteractionUserId, getGuildAndChannelIds } from './interactionHelpers.js';
 
@@ -118,20 +118,7 @@ async function maybeResolveNight(gameId: string): Promise<void> {
       }
 
       if (win) {
-        const wolfMentions =
-          win.wolves.length > 0
-            ? win.wolves.map((p) => `<@${p.user_id}>`).join(', ')
-            : null;
-
-        lines.push(
-          win.winner === 'town'
-            ? 'Town has eliminated all werewolves. Town wins!'
-            : 'Wolves now control the village. Wolves win!',
-        );
-
-        if (wolfMentions) {
-          lines.push(`The werewolves were: ${wolfMentions}.`);
-        }
+        lines.push(...buildWinLines(win));
       } else {
         lines.push(
           `Day ${upcomingDay} begins. You have 1 minute to discuss before voting starts.`,
@@ -239,20 +226,7 @@ async function maybeResolveDay(gameId: string): Promise<void> {
       ];
 
       if (win) {
-        const wolfMentions =
-          win.wolves.length > 0
-            ? win.wolves.map((p) => `<@${p.user_id}>`).join(', ')
-            : null;
-
-        lines.push(
-          win.winner === 'town'
-            ? 'Town has eliminated all werewolves. Town wins!'
-            : 'Wolves now control the village. Wolves win!',
-        );
-
-        if (wolfMentions) {
-          lines.push(`The werewolves were: ${wolfMentions}.`);
-        }
+        lines.push(...buildWinLines(win));
       } else {
         lines.push('Night falls...');
       }
