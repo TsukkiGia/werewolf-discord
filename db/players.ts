@@ -1,4 +1,6 @@
 import { pool } from './client.js';
+import { assignRolesForPlayerIds } from '../game/engine/assignRoles.js';
+import type { AssignedRole } from '../game/types.js';
 
 export async function addPlayer(gameId: string, userId: string): Promise<void> {
   const joinedAt = Date.now();
@@ -26,3 +28,41 @@ export async function getPlayerIdsForGame(gameId: string): Promise<string[]> {
   return result.rows.map((row) => row.user_id);
 }
 
+interface PlayerRow {
+  id: number;
+  user_id: string;
+}
+
+export async function assignRolesForGame(gameId: string): Promise<AssignedRole[]> {
+  const result = await pool.query<PlayerRow>(
+    `
+    SELECT id, user_id
+    FROM game_players
+    WHERE game_id = $1
+    ORDER BY joined_at ASC
+    `,
+    [gameId],
+  );
+
+  const players = result.rows.map((p) => p.user_id);
+  if (players.length === 0) return [];
+
+  const assignments = assignRolesForPlayerIds(players);
+
+  // Persist roles
+  await Promise.all(
+    assignments.map((assignment) =>
+      pool.query(
+        `
+        UPDATE game_players
+        SET role = $1,
+            alignment = $2
+        WHERE game_id = $3 AND user_id = $4
+        `,
+        [assignment.role, assignment.alignment, gameId, assignment.userId],
+      ),
+    ),
+  );
+
+  return assignments;
+}

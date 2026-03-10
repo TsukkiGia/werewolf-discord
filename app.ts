@@ -18,6 +18,9 @@ import {
   endGame,
   startGame,
 } from './db.js';
+import { assignRolesForGame } from './db/players.js';
+import { DiscordRequest } from './utils.js';
+import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
 
 // Ensure database schema exists before handling traffic
 await initDb();
@@ -222,9 +225,46 @@ app.post(
           });
         }
 
+        const playerIds = await getPlayerIdsForGame(game.id);
+        if (playerIds.length < 3) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              flags: InteractionResponseFlags.EPHEMERAL,
+              content: 'You need at least 3 players to start a Werewolf game.',
+            },
+          });
+        }
+
+        const assignments = await assignRolesForGame(game.id);
+
         await startGame(game.id);
 
-        const playerIds = await getPlayerIdsForGame(game.id);
+        // DM each player their role
+        await Promise.all(
+          assignments.map(async (assignment) => {
+            try {
+              const dmRes = await DiscordRequest('users/@me/channels', {
+                method: 'POST',
+                body: { recipient_id: assignment.userId },
+              });
+              const dmChannel = (await dmRes.json()) as { id: string };
+
+              const def = ROLE_REGISTRY[assignment.role];
+              const roleLine = def.dmIntro;
+
+              await DiscordRequest(`channels/${dmChannel.id}/messages`, {
+                method: 'POST',
+                body: {
+                  content: `Your role for this Werewolf game is: **${assignment.role}**.\n${roleLine}`,
+                },
+              });
+            } catch (err) {
+              console.error('Failed to DM role to user', assignment.userId, err);
+            }
+          }),
+        );
+
         const playersText =
           playerIds.length > 0
             ? playerIds.map((id: string) => `<@${id}>`).join(', ')
