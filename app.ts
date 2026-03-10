@@ -17,40 +17,99 @@ import {
   getPlayerIdsForGame,
   endGame,
   startGame,
+  assignRolesForGame,
+  getPlayersForGame,
+  markPlayerDead,
+  getNightActionsForNight,
+  advancePhase,
+  recordNightAction,
+  processSeerActions,
 } from './db.js';
-import { assignRolesForGame } from './db/players.js';
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
-import { recordNightAction } from './db/nightActions.js';
+import { dmRolesAndNightActions } from './game/engine/dmRoles.js';
+import { chooseKillVictim } from './game/engine/nightResolution.js';
 
-async function getDisplayName(userId: string, guildId: string | null): Promise<string> {
-  // Prefer guild nickname/username when we know the guild
-  if (guildId) {
-    try {
-      const res = await DiscordRequest(`guilds/${guildId}/members/${userId}`, {
-        method: 'GET',
-      });
-      const member = (await res.json()) as {
-        nick: string | null;
-        user: { username: string };
-      };
-      return member.nick ?? member.user.username;
-    } catch (err) {
-      console.error('Failed to fetch guild member', guildId, userId, err);
-    }
-  }
-
-  // Fallback to global username
+async function maybeResolveNight(gameId: string): Promise<void> {
   try {
-    const res = await DiscordRequest(`users/${userId}`, { method: 'GET' });
-    const user = (await res.json()) as { username: string };
-    return user.username;
-  } catch (err) {
-    console.error('Failed to fetch user', userId, err);
-  }
+    const game = await getGame(gameId);
+    if (!game || game.status !== 'night') {
+      return;
+    }
 
-  // Last resort: show raw ID
-  return userId;
+    const nightNumber = 1; // TODO: support multiple nights
+
+    const players = await getPlayersForGame(gameId);
+
+    const requiredActors = players.filter((p) => {
+      if (!p.is_alive) return false;
+      const def = ROLE_REGISTRY[p.role as keyof typeof ROLE_REGISTRY];
+      if (!def) return false;
+      return def.nightAction.kind !== 'none';
+    });
+
+    const requiredActorIds = new Set(requiredActors.map((p) => p.user_id));
+
+    const actions = await getNightActionsForNight(gameId, nightNumber);
+    const actedIds = new Set(actions.map((a) => a.actor_id));
+
+    // Wait until all required night-action roles have acted.
+    for (const actorId of requiredActorIds) {
+      if (!actedIds.has(actorId)) {
+        return;
+      }
+    }
+
+    // Everyone has acted; resolve night.
+    const killTargets = actions
+      .filter((a) => a.action_kind === 'kill' && a.target_id)
+      .map((a) => a.target_id as string);
+
+    const protectTargets = actions
+      .filter((a) => a.action_kind === 'protect' && a.target_id)
+      .map((a) => a.target_id as string);
+
+    // Determine final kill victim using engine helper.
+    const victimId = chooseKillVictim(killTargets);
+
+    // Send inspection results to seers before applying kills.
+    await processSeerActions(players, actions);
+
+    const protectedSet = new Set(protectTargets);
+
+    const killedIds: string[] = [];
+    if (victimId && !protectedSet.has(victimId)) {
+      killedIds.push(victimId);
+      await markPlayerDead(gameId, victimId);
+    }
+
+    await advancePhase(gameId); // night -> day
+
+    if (game.channel_id) {
+      const victims = players.filter((p) => killedIds.includes(p.user_id));
+      let summary: string;
+
+      if (victims.length === 0) {
+        summary = 'Dawn breaks. No one was eliminated during the night.';
+      } else {
+        const lines = victims.map(
+          (v) => `<@${v.user_id}> was eliminated during the night. They were a **${v.role}**.`,
+        );
+        summary = `Dawn breaks.\n${lines.join('\n')}`;
+      }
+
+      try {
+        await DiscordRequest(`channels/${game.channel_id}/messages`, {
+          method: 'POST',
+          body: { content: summary },
+        });
+      } catch (err) {
+        console.error('Failed to send day summary message', err);
+      }
+    }
+  } catch (err) {
+    console.error('Error resolving night phase', err);
+  }
 }
 
 // Ensure database schema exists before handling traffic
@@ -275,77 +334,15 @@ app.post(
 
         await startGame(game.id);
 
-        // DM each player their role and night action (if any)
-        await Promise.all(
-          assignments.map(async (assignment) => {
-            try {
-              const dmRes = await DiscordRequest('users/@me/channels', {
-                method: 'POST',
-                body: { recipient_id: assignment.userId },
-              });
-              const dmChannel = (await dmRes.json()) as { id: string };
+        // Re-read players to know who is alive; night-action target lists should only
+        // include currently-alive players.
+        const playersForTargets = await getPlayersForGame(game.id);
+        const aliveTargetIds = playersForTargets
+          .filter((p) => p.is_alive)
+          .map((p) => p.user_id);
 
-              const def = ROLE_REGISTRY[assignment.role];
-              const roleLine = def.dmIntro;
-
-              const baseContent = `Your role for this Werewolf game is: **${assignment.role}**.\n${roleLine}`;
-
-              const components: any[] = [];
-
-              if (def.nightAction.target === 'player' && def.nightAction.kind !== 'none') {
-                const options = await Promise.all(
-                  playerIds
-                    .filter((id: string) =>
-                      def.nightAction.canTargetSelf ? true : id !== assignment.userId,
-                    )
-                    .map(async (id: string) => ({
-                      label: await getDisplayName(id, game.guild_id),
-                      value: id,
-                    })),
-                );
-
-                if (options.length > 0) {
-                  components.push({
-                    type: MessageComponentTypes.ACTION_ROW,
-                    components: [
-                      {
-                        type: MessageComponentTypes.STRING_SELECT,
-                        custom_id: `night_action:${game.id}:${assignment.role}`,
-                        placeholder: 'Choose your night target',
-                        min_values: 1,
-                        max_values: 1,
-                        options,
-                      },
-                    ],
-                  });
-                }
-              }
-
-              await DiscordRequest(`channels/${dmChannel.id}/messages`, {
-                method: 'POST',
-                body: components.length
-                  ? {
-                      // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
-                      // not the legacy `content` field.
-                      flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-                      components: [
-                        {
-                          type: MessageComponentTypes.TEXT_DISPLAY,
-                          content: baseContent,
-                        },
-                        ...components,
-                      ],
-                    }
-                  : {
-                      // No components v2 here, so plain content is fine.
-                      content: baseContent,
-                    },
-              });
-            } catch (err) {
-              console.error('Failed to DM role to user', assignment.userId, err);
-            }
-          }),
-        );
+        // DM each player their role and night action (if any), using alive players as targets
+        await dmRolesAndNightActions({ game, playerIds: aliveTargetIds, assignments });
 
         const playersText =
           playerIds.length > 0
@@ -412,7 +409,7 @@ app.post(
 	              ],
 	            },
 	          });
-	        } else if (componentId.startsWith('night_action:')) {
+        } else if (componentId.startsWith('night_action:')) {
 	          const withoutPrefix = componentId.replace('night_action:', '');
 	          const [gameId, role] = withoutPrefix.split(':');
 
@@ -426,25 +423,30 @@ app.post(
 	            return res.status(400).json({ error: 'invalid night action payload' });
 	          }
 
-	          const def = ROLE_REGISTRY[role as keyof typeof ROLE_REGISTRY];
+          const def = ROLE_REGISTRY[role as keyof typeof ROLE_REGISTRY];
 
-	          await recordNightAction({
-	            gameId,
-	            night: 1,
-	            actorId,
-	            targetId,
-	            actionKind: def.nightAction.kind,
-	            role: def.name,
-	          });
+          await recordNightAction({
+            gameId,
+            night: 1,
+            actorId,
+            targetId,
+            actionKind: def.nightAction.kind,
+            role: def.name,
+          });
 
-	          return res.send({
-	            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-	            data: {
-	              flags: InteractionResponseFlags.EPHEMERAL,
-	              content: 'Your night action has been recorded.',
-	            },
-	          });
-	        }
+          res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              flags: InteractionResponseFlags.EPHEMERAL,
+              content: 'Your night action has been recorded.',
+            },
+          });
+
+          // After acknowledging the interaction, attempt to resolve the night.
+          // This will only advance to day once all required night-action roles have acted.
+          void maybeResolveNight(gameId);
+          return;
+        }
 
         console.error(`unknown component: ${componentId}`);
         return res.status(400).json({ error: 'unknown component' });

@@ -66,3 +66,34 @@ export async function assignRolesForGame(gameId: string): Promise<AssignedRole[]
 
   return assignments;
 }
+
+export interface GamePlayerState {
+  user_id: string;
+  role: string;
+  alignment: string | null;
+  is_alive: boolean;
+}
+
+export async function getPlayersForGame(gameId: string): Promise<GamePlayerState[]> {
+  const result = await pool.query<GamePlayerState>(
+    `
+    SELECT user_id, role, alignment, is_alive
+    FROM game_players
+    WHERE game_id = $1
+    `,
+    [gameId],
+  );
+
+  return result.rows;
+}
+
+export async function markPlayerDead(gameId: string, userId: string): Promise<void> {
+  await pool.query(
+    `
+    UPDATE game_players
+    SET is_alive = FALSE
+    WHERE game_id = $1 AND user_id = $2
+    `,
+    [gameId, userId],
+  );
+}

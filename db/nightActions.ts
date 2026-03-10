@@ -1,5 +1,7 @@
 import { pool } from './client.js';
 import type { NightActionKind, RoleName } from '../game/types.js';
+import type { GamePlayerState } from './players.js';
+import { DiscordRequest } from '../utils.js';
 
 export interface NightActionRow {
   id: number;
@@ -58,5 +60,42 @@ export async function getNightActionsForNight(
   );
 
   return result.rows;
+}
+
+/**
+ * Process all seer-type night actions by DMing inspection results.
+ * Only reveals info for targets that are still alive.
+ */
+export async function processSeerActions(
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+): Promise<void> {
+  const inspectActions = actions.filter(
+    (a) => a.action_kind === 'inspect' && a.target_id,
+  );
+
+  await Promise.all(
+    inspectActions.map(async (action) => {
+      const target = players.find((p) => p.user_id === action.target_id);
+      if (!target || !target.is_alive) return;
+
+      try {
+        const dmRes = await DiscordRequest('users/@me/channels', {
+          method: 'POST',
+          body: { recipient_id: action.actor_id },
+        });
+        const dmChannel = (await dmRes.json()) as { id: string };
+
+        await DiscordRequest(`channels/${dmChannel.id}/messages`, {
+          method: 'POST',
+          body: {
+            content: `Your vision reveals that <@${target.user_id}> is **${target.role}**.`,
+          },
+        });
+      } catch (err) {
+        console.error('Failed to DM seer inspection result', err);
+      }
+    }),
+  );
 }
 
