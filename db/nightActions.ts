@@ -27,11 +27,6 @@ export async function recordNightAction(params: {
     `
     INSERT INTO night_actions (game_id, night, actor_id, target_id, action_kind, role, created_at)
     VALUES ($1, $2, $3, $4, $5, $6, $7)
-    ON CONFLICT (game_id, night, actor_id)
-    DO UPDATE SET target_id = EXCLUDED.target_id,
-                  action_kind = EXCLUDED.action_kind,
-                  role = EXCLUDED.role,
-                  created_at = EXCLUDED.created_at
     `,
     [
       params.gameId,
@@ -43,6 +38,24 @@ export async function recordNightAction(params: {
       createdAt,
     ],
   );
+}
+
+export async function hasNightAction(
+  gameId: string,
+  night: number,
+  actorId: string,
+): Promise<boolean> {
+  const result = await pool.query(
+    `
+    SELECT 1
+    FROM night_actions
+    WHERE game_id = $1 AND night = $2 AND actor_id = $3
+    LIMIT 1
+    `,
+    [gameId, night, actorId],
+  );
+
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function getNightActionsForNight(
@@ -147,4 +160,3 @@ export async function processDoctorActions(
     }),
   );
 }
-

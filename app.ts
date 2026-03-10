@@ -27,6 +27,8 @@ import {
   processDoctorActions,
   recordDayVote,
   getVotesForDay,
+  hasNightAction,
+  hasDayVote,
 } from './db.js';
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
@@ -575,22 +577,53 @@ app.post(
               return res.status(400).json({ error: 'no active night for this game' });
             }
 
+            const nightNumber = gameForNight.current_night || 1;
+
+            if (await hasNightAction(gameId, nightNumber, actorId)) {
+              return res.send({
+                type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+                data: {
+                  flags: InteractionResponseFlags.EPHEMERAL,
+                  content: 'You have already submitted your night action. It cannot be changed.',
+                },
+              });
+            }
+
           const def = ROLE_REGISTRY[role as keyof typeof ROLE_REGISTRY];
 
           await recordNightAction({
             gameId,
-            night: gameForNight.current_night || 1,
+            night: nightNumber,
             actorId,
             targetId,
             actionKind: def.nightAction.kind,
             role: def.name,
           });
 
+          const verb =
+            def.nightAction.kind === 'kill'
+              ? 'attack'
+              : def.nightAction.kind === 'inspect'
+                ? 'inspect'
+                : def.nightAction.kind === 'protect'
+                  ? 'protect'
+                  : 'act on';
+
+          const confirmation =
+            targetId != null
+              ? `Your night action has been recorded: you chose to ${verb} <@${targetId}>.`
+              : 'Your night action has been recorded.';
+
           res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            type: InteractionResponseType.UPDATE_MESSAGE,
             data: {
-              flags: InteractionResponseFlags.EPHEMERAL,
-              content: 'Your night action has been recorded.',
+              flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+              components: [
+                {
+                  type: MessageComponentTypes.TEXT_DISPLAY,
+                  content: confirmation,
+                },
+              ],
             },
           });
 
@@ -647,19 +680,37 @@ app.post(
             });
           }
 
-          // Record or update the player’s vote for this day.
+          const dayNumber = game.current_day || 1;
+
+          if (await hasDayVote(game.id, dayNumber, actorId)) {
+            return res.send({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                content:
+                  'You have already voted today. Your vote cannot be changed.',
+              },
+            });
+          }
+
+          // Record the player’s vote for this day.
           await recordDayVote({
             gameId: game.id,
-            day: game.current_day || 1,
+            day: dayNumber,
             voterId: actorId,
             targetId,
           });
 
-          // Acknowledge in the DM.
+          // Update the DM to remove the select and show confirmation.
           res.send({
-            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            type: InteractionResponseType.UPDATE_MESSAGE,
             data: {
-              content: `Your vote to lynch <@${targetId}> has been recorded.`,
+              flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+              components: [
+                {
+                  type: MessageComponentTypes.TEXT_DISPLAY,
+                  content: `Your vote to lynch <@${targetId}> has been recorded.`,
+                },
+              ],
             },
           });
 
