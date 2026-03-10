@@ -21,6 +21,37 @@ import {
 import { assignRolesForGame } from './db/players.js';
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
+import { recordNightAction } from './db/nightActions.js';
+
+async function getDisplayName(userId: string, guildId: string | null): Promise<string> {
+  // Prefer guild nickname/username when we know the guild
+  if (guildId) {
+    try {
+      const res = await DiscordRequest(`guilds/${guildId}/members/${userId}`, {
+        method: 'GET',
+      });
+      const member = (await res.json()) as {
+        nick: string | null;
+        user: { username: string };
+      };
+      return member.nick ?? member.user.username;
+    } catch (err) {
+      console.error('Failed to fetch guild member', guildId, userId, err);
+    }
+  }
+
+  // Fallback to global username
+  try {
+    const res = await DiscordRequest(`users/${userId}`, { method: 'GET' });
+    const user = (await res.json()) as { username: string };
+    return user.username;
+  } catch (err) {
+    console.error('Failed to fetch user', userId, err);
+  }
+
+  // Last resort: show raw ID
+  return userId;
+}
 
 // Ensure database schema exists before handling traffic
 await initDb();
@@ -58,7 +89,10 @@ app.post(
 	      if (name === 'ww_create' && id) {
 	        const context = req.body.context;
 	        // User ID is in user field for (G)DMs, and member for servers
-	        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+	        const userId =
+	          context === 0
+	            ? req.body.member.user.id
+	            : (req.body.user?.id ?? req.body.member?.user?.id);
 
 	        const gameId = String(id);
 	        const guildId: string | null = req.body.guild_id ?? null;
@@ -70,7 +104,6 @@ app.post(
 	          return res.send({
 	            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
 	            data: {
-	              flags: InteractionResponseFlags.EPHEMERAL,
 	              content: `There is already an active Werewolf game in this channel started by <@${existingGame.host_id}>.`,
 	            },
 	          });
@@ -121,20 +154,21 @@ app.post(
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              flags: InteractionResponseFlags.EPHEMERAL,
               content: 'There is no active Werewolf game in this channel to end.',
             },
           });
         }
 
         const context = req.body.context;
-        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+        const userId =
+          context === 0
+            ? req.body.member.user.id
+            : (req.body.user?.id ?? req.body.member?.user?.id);
 
         if (userId !== game.host_id) {
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              flags: InteractionResponseFlags.EPHEMERAL,
               content: `Only the host <@${game.host_id}> can end this game.`,
             },
           });
@@ -207,31 +241,31 @@ app.post(
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              flags: InteractionResponseFlags.EPHEMERAL,
               content: 'There is no active Werewolf game in this channel to start.',
             },
           });
         }
 
         const context = req.body.context;
-        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+        const userId =
+          context === 0
+            ? req.body.member.user.id
+            : (req.body.user?.id ?? req.body.member?.user?.id);
 
         if (userId !== game.host_id) {
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              flags: InteractionResponseFlags.EPHEMERAL,
               content: `Only the host <@${game.host_id}> can start this game.`,
             },
           });
         }
 
         const playerIds = await getPlayerIdsForGame(game.id);
-        if (playerIds.length < 3) {
+        if (playerIds.length < 2) {
           return res.send({
             type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
             data: {
-              flags: InteractionResponseFlags.EPHEMERAL,
               content: 'You need at least 3 players to start a Werewolf game.',
             },
           });
@@ -241,7 +275,7 @@ app.post(
 
         await startGame(game.id);
 
-        // DM each player their role
+        // DM each player their role and night action (if any)
         await Promise.all(
           assignments.map(async (assignment) => {
             try {
@@ -254,11 +288,58 @@ app.post(
               const def = ROLE_REGISTRY[assignment.role];
               const roleLine = def.dmIntro;
 
+              const baseContent = `Your role for this Werewolf game is: **${assignment.role}**.\n${roleLine}`;
+
+              const components: any[] = [];
+
+              if (def.nightAction.target === 'player' && def.nightAction.kind !== 'none') {
+                const options = await Promise.all(
+                  playerIds
+                    .filter((id: string) =>
+                      def.nightAction.canTargetSelf ? true : id !== assignment.userId,
+                    )
+                    .map(async (id: string) => ({
+                      label: await getDisplayName(id, game.guild_id),
+                      value: id,
+                    })),
+                );
+
+                if (options.length > 0) {
+                  components.push({
+                    type: MessageComponentTypes.ACTION_ROW,
+                    components: [
+                      {
+                        type: MessageComponentTypes.STRING_SELECT,
+                        custom_id: `night_action:${game.id}:${assignment.role}`,
+                        placeholder: 'Choose your night target',
+                        min_values: 1,
+                        max_values: 1,
+                        options,
+                      },
+                    ],
+                  });
+                }
+              }
+
               await DiscordRequest(`channels/${dmChannel.id}/messages`, {
                 method: 'POST',
-                body: {
-                  content: `Your role for this Werewolf game is: **${assignment.role}**.\n${roleLine}`,
-                },
+                body: components.length
+                  ? {
+                      // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
+                      // not the legacy `content` field.
+                      flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+                      components: [
+                        {
+                          type: MessageComponentTypes.TEXT_DISPLAY,
+                          content: baseContent,
+                        },
+                        ...components,
+                      ],
+                    }
+                  : {
+                      // No components v2 here, so plain content is fine.
+                      content: baseContent,
+                    },
               });
             } catch (err) {
               console.error('Failed to DM role to user', assignment.userId, err);
@@ -301,7 +382,7 @@ app.post(
 	              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
 	              data: {
 	                flags:
-	                  InteractionResponseFlags.IS_COMPONENTS_V2 | InteractionResponseFlags.EPHEMERAL,
+	                  InteractionResponseFlags.IS_COMPONENTS_V2,
 	                components: [
 	                  {
 	                    type: MessageComponentTypes.TEXT_DISPLAY,
@@ -313,7 +394,10 @@ app.post(
 	          }
 
 	          const context = req.body.context;
-	          const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+	          const userId =
+	            context === 0
+	              ? req.body.member.user.id
+	              : (req.body.user?.id ?? req.body.member?.user?.id);
 	          await addPlayer(gameId, userId);
 	          return res.send({
 	            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -326,6 +410,38 @@ app.post(
 	                  content: `<@${userId}> joined the game.`,
 	                },
 	              ],
+	            },
+	          });
+	        } else if (componentId.startsWith('night_action:')) {
+	          const withoutPrefix = componentId.replace('night_action:', '');
+	          const [gameId, role] = withoutPrefix.split(':');
+
+	          const targetId: string | null =
+	            Array.isArray(data.values) && data.values.length > 0 ? data.values[0] : null;
+
+	          const actorId =
+	            req.body.member?.user?.id ?? req.body.user?.id;
+
+	          if (!actorId || !gameId || !role) {
+	            return res.status(400).json({ error: 'invalid night action payload' });
+	          }
+
+	          const def = ROLE_REGISTRY[role as keyof typeof ROLE_REGISTRY];
+
+	          await recordNightAction({
+	            gameId,
+	            night: 1,
+	            actorId,
+	            targetId,
+	            actionKind: def.nightAction.kind,
+	            role: def.name,
+	          });
+
+	          return res.send({
+	            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+	            data: {
+	              flags: InteractionResponseFlags.EPHEMERAL,
+	              content: 'Your night action has been recorded.',
 	            },
 	          });
 	        }
