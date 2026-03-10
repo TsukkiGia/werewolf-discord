@@ -24,6 +24,7 @@ import {
   advancePhase,
   recordNightAction,
   processSeerActions,
+  processDoctorActions,
 } from './db.js';
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
@@ -82,6 +83,9 @@ async function maybeResolveNight(gameId: string): Promise<void> {
       killedIds.push(victimId);
       await markPlayerDead(gameId, victimId);
     }
+
+    // Inform doctors whether their protection mattered.
+    await processDoctorActions(players, actions, killTargets, killedIds);
 
     await advancePhase(gameId); // night -> day
 

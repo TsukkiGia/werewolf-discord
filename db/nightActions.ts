@@ -99,3 +99,52 @@ export async function processSeerActions(
   );
 }
 
+/**
+ * Process doctor-type actions by DMing whether their protection
+ * actually blocked a wolf attack or not.
+ */
+export async function processDoctorActions(
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+  killTargets: string[],
+  killedIds: string[],
+): Promise<void> {
+  const protectActions = actions.filter(
+    (a) => a.action_kind === 'protect' && a.target_id,
+  );
+
+  await Promise.all(
+    protectActions.map(async (action) => {
+      const target = players.find((p) => p.user_id === action.target_id);
+      if (!target) return;
+
+      const targetId = target.user_id;
+      const wasTargetedByWolves = killTargets.includes(targetId);
+      const wasKilled = killedIds.includes(targetId);
+      const saved = wasTargetedByWolves && !wasKilled;
+
+      const base =
+        saved
+          ? `You protected <@${targetId}>. They were attacked and you saved them from death.`
+          : wasTargetedByWolves && wasKilled
+            ? `You protected <@${targetId}>, but they were still eliminated.`
+            : `You protected <@${targetId}>. They were not attacked tonight.`;
+
+      try {
+        const dmRes = await DiscordRequest('users/@me/channels', {
+          method: 'POST',
+          body: { recipient_id: action.actor_id },
+        });
+        const dmChannel = (await dmRes.json()) as { id: string };
+
+        await DiscordRequest(`channels/${dmChannel.id}/messages`, {
+          method: 'POST',
+          body: { content: base },
+        });
+      } catch (err) {
+        console.error('Failed to DM doctor protection result', err);
+      }
+    }),
+  );
+}
+
