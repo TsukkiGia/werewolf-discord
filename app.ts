@@ -404,18 +404,28 @@ app.post(
           });
         }
 
-        const playerIds = await getPlayerIdsForGame(game.id);
-        const playersText =
-          playerIds.length > 0
-            ? playerIds.map((id: string) => `<@${id}>`).join('\n')
+        const players = await getPlayersForGame(game.id);
+
+        const phaseLine =
+          game.status === 'night'
+            ? `Phase: night (Night ${game.current_night || 1})`
+            : game.status === 'day'
+              ? `Phase: day (Day ${game.current_day || 1})`
+              : `Phase: ${game.status}`;
+
+        const playerLines =
+          players.length > 0
+            ? players
+                .map((p) => `${p.is_alive ? '🟢' : '⚫️'} <@${p.user_id}>`)
+                .join('\n')
             : 'No players have joined yet.';
 
         const messageLines = [
           `Game status for this channel:`,
-          `Phase: ${game.status}`,
+          phaseLine,
           `Host: <@${game.host_id}>`,
-          `Players (${playerIds.length}):`,
-          playersText,
+          `Players (${players.length}):`,
+          playerLines,
         ];
 
         return res.send({
