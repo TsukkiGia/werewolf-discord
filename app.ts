@@ -91,35 +91,56 @@ async function maybeResolveNight(gameId: string): Promise<void> {
     // Inform doctors whether their protection mattered.
     await processDoctorActions(players, actions, killTargets, killedIds);
 
-    await advancePhase(gameId); // night -> day
+    // Re-read players after applying night kills and evaluate win conditions.
+    const updatedPlayers = await getPlayersForGame(gameId);
+    const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
-      const victims = players.filter((p) => killedIds.includes(p.user_id));
-      let summary: string;
+      const victims = updatedPlayers.filter((p) => killedIds.includes(p.user_id));
+      const lines: string[] = [];
 
       if (victims.length === 0) {
-        summary = 'Dawn breaks. No one was eliminated during the night.';
+        lines.push('Dawn breaks. No one was eliminated during the night.');
       } else {
-        const lines = victims.map(
-          (v) => `<@${v.user_id}> was eliminated during the night. They were a **${v.role}**.`,
+        const victimLines = victims.map(
+          (v) =>
+            `<@${v.user_id}> was eliminated during the night. They were a **${v.role}**.`,
         );
-        summary = `Dawn breaks.\n${lines.join('\n')}`;
+        lines.push('Dawn breaks.');
+        lines.push(...victimLines);
+      }
+
+      if (win) {
+        lines.push(
+          win.winner === 'town'
+            ? 'Town has eliminated all werewolves. Town wins!'
+            : 'Wolves now control the village. Wolves win!',
+        );
+      } else {
+        lines.push('Day begins. Discuss and prepare to vote.');
       }
 
       try {
         await DiscordRequest(`channels/${game.channel_id}/messages`, {
           method: 'POST',
-          body: { content: summary },
+          body: { content: lines.join('\n') },
         });
       } catch (err) {
         console.error('Failed to send day summary message', err);
       }
     }
 
+    if (win) {
+      await endGame(gameId);
+      return;
+    }
+
+    // No winner yet: advance to the next phase (night -> day).
+    await advancePhase(gameId);
+
     // After announcing dawn, DM alive players with a day-vote menu.
     try {
-      const playersAfterNight = await getPlayersForGame(gameId);
-      await dmDayVotePrompts({ game, players: playersAfterNight });
+      await dmDayVotePrompts({ game, players: updatedPlayers });
     } catch (err) {
       console.error('Failed to DM day vote prompts', err);
     }
