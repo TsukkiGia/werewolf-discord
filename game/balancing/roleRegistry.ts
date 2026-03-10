@@ -11,3 +11,7 @@ export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
   seer: SeerRole,
   doctor: DoctorRole,
 };
+
+export function isRoleName(value: unknown): value is RoleName {
+  return typeof value === 'string' && value in ROLE_REGISTRY;
+}

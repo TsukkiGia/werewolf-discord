@@ -5,7 +5,7 @@ import {
 import type { AssignedRole } from '../types.js';
 import type { GameRow } from '../../db/games.js';
 import type { GamePlayerState } from '../../db/players.js';
-import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
+import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
 import { DiscordRequest } from '../../utils.js';
 
 // Cache display names per user ID for the lifetime of the process so we don't
@@ -148,8 +148,9 @@ export async function dmNightActionsForAlivePlayers(params: {
 
   const assignments: AssignedRole[] = alivePlayers
     .map((p) => {
-      const def = ROLE_REGISTRY[p.role as keyof typeof ROLE_REGISTRY];
-      if (!def || def.nightAction.kind === 'none') {
+      if (!isRoleName(p.role)) return null;
+      const def = ROLE_REGISTRY[p.role];
+      if (def.nightAction.kind === 'none') {
         return null;
       }
       return {

@@ -13,7 +13,7 @@ import {
   hasDayVote,
 } from '../db.js';
 import { DiscordRequest } from '../utils.js';
-import { ROLE_REGISTRY } from '../game/balancing/roleRegistry.js';
+import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
 import { getInteractionUserId } from '../interactionHelpers.js';
 import { maybeResolveNight, maybeResolveDay } from '../game/engine/gameOrchestrator.js';
 import { buildJoinClosedComponents } from './commands.js';
@@ -100,7 +100,10 @@ export async function handleNightAction(req: any, res: any, componentId: string)
     });
   }
 
-  const def = ROLE_REGISTRY[role as keyof typeof ROLE_REGISTRY];
+  if (!isRoleName(role)) {
+    return res.status(400).json({ error: 'invalid role in night action payload' });
+  }
+  const def = ROLE_REGISTRY[role];
 
   const inserted = await recordNightAction({
     gameId,

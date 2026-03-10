@@ -1,6 +1,6 @@
 import type { GamePlayerState } from '../../db/players.js';
 import type { NightActionRow } from '../../db/nightActions.js';
-import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
+import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
 
 /**
  * Choose the final night-kill victim from a list of target user IDs.
@@ -65,8 +65,8 @@ export function evaluateNightResolution(
 ): NightResolutionResult {
   const requiredActors = players.filter((p) => {
     if (!p.is_alive) return false;
-    const def = ROLE_REGISTRY[p.role as keyof typeof ROLE_REGISTRY];
-    if (!def) return false;
+    if (!isRoleName(p.role)) return false;
+    const def = ROLE_REGISTRY[p.role];
     return def.nightAction.kind !== 'none';
   });
 
