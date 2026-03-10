@@ -18,6 +18,11 @@ ALTER TABLE games
 ALTER TABLE games
   ADD COLUMN IF NOT EXISTS join_message_id TEXT;
 
+-- Ensure at most one non-ended game per (channel, guild) pair.
+CREATE UNIQUE INDEX IF NOT EXISTS active_games_per_channel
+  ON games (channel_id, guild_id)
+  WHERE status <> 'ended';
+
 CREATE TABLE IF NOT EXISTS game_players (
   id SERIAL PRIMARY KEY,
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,

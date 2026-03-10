@@ -21,16 +21,24 @@ export async function createGame(params: {
   guildId: string | null;
   channelId: string | null;
   hostId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   const createdAt = Date.now();
-  await pool.query(
-    `
-    INSERT INTO games (id, guild_id, channel_id, host_id, status, created_at, current_day, current_night)
-    VALUES ($1, $2, $3, $4, $5, $6, 0, 0)
-    ON CONFLICT (id) DO NOTHING
-    `,
-    [params.id, params.guildId, params.channelId, params.hostId, 'lobby', createdAt],
-  );
+  try {
+    await pool.query(
+      `
+      INSERT INTO games (id, guild_id, channel_id, host_id, status, created_at, current_day, current_night)
+      VALUES ($1, $2, $3, $4, $5, $6, 0, 0)
+      `,
+      [params.id, params.guildId, params.channelId, params.hostId, 'lobby', createdAt],
+    );
+    return true;
+  } catch (err: any) {
+    // 23505 = unique_violation (e.g., due to active_games_per_channel index or id PK).
+    if (err && typeof err.code === 'string' && err.code === '23505') {
+      return false;
+    }
+    throw err;
+  }
 }
 
 export async function getGame(id: string): Promise<GameRow | null> {

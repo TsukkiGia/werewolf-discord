@@ -320,13 +320,26 @@ app.post(
 	          });
 	        }
 
-	        // Persist game and host player in the database
-	        await createGame({
+	        // Persist game and host player in the database. If the insert fails due
+          // to our unique "one active game per channel" constraint, treat it as if
+          // another game was created concurrently.
+	        const created = await createGame({
 	          id: gameId,
 	          guildId,
 	          channelId,
 	          hostId: userId,
 	        });
+          if (!created) {
+            const concurrent = await getActiveGameForChannel(guildId, channelId);
+            const hostMention = concurrent ? `<@${concurrent.host_id}>` : 'someone else';
+            return res.send({
+              type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+              data: {
+                content: `There is already an active Werewolf game in this channel started by ${hostMention}.`,
+              },
+            });
+          }
+
 	        await addPlayer(gameId, userId);
 
           // Post the visible game message with a Join button and store its ID.
