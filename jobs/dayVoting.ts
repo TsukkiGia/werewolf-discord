@@ -14,6 +14,7 @@ export async function scheduleDayVoting(gameId: string, dayNumber: number): Prom
 }
 
 export async function registerWorkers(): Promise<void> {
+  await boss.createQueue('day-voting');
   await boss.work<DayVotingData>('day-voting', async (jobs: Job<DayVotingData>[]) => {
     const job = jobs[0];
     if (!job) return;

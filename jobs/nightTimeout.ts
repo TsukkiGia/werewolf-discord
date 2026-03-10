@@ -15,6 +15,7 @@ export async function scheduleNightTimeout(gameId: string, nightNumber: number):
 export async function registerNightWorker(
   onResolve: (gameId: string) => Promise<void>,
 ): Promise<void> {
+  await boss.createQueue('night-timeout');
   await boss.work<NightTimeoutData>('night-timeout', async (jobs: Job<NightTimeoutData>[]) => {
     const job = jobs[0];
     if (!job) return;
