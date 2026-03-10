@@ -32,7 +32,11 @@ import {
 } from './db.js';
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
-import { dmRolesAndNightActions, startDayVoting } from './game/engine/dmRoles.js';
+import {
+  dmRolesAndNightActions,
+  dmNightActionsForAlivePlayers,
+  startDayVoting,
+} from './game/engine/dmRoles.js';
 import { chooseKillVictim, evaluateNightResolution } from './game/engine/nightResolution.js';
 import { evaluateDayResolution } from './game/engine/dayResolution.js';
 import { evaluateWinCondition } from './game/engine/winConditions.js';
@@ -114,11 +118,20 @@ async function maybeResolveNight(gameId: string): Promise<void> {
       }
 
       if (win) {
+        const wolfMentions =
+          win.wolves.length > 0
+            ? win.wolves.map((p) => `<@${p.user_id}>`).join(', ')
+            : null;
+
         lines.push(
           win.winner === 'town'
             ? 'Town has eliminated all werewolves. Town wins!'
             : 'Wolves now control the village. Wolves win!',
         );
+
+        if (wolfMentions) {
+          lines.push(`The werewolves were: ${wolfMentions}.`);
+        }
       } else {
         lines.push(
           `Day ${upcomingDay} begins. You have 1 minute to discuss before voting starts.`,
@@ -186,6 +199,15 @@ async function maybeResolveDay(gameId: string): Promise<void> {
       }
 
       await advancePhase(gameId); // day -> night
+
+      // After flipping to night, DM fresh night-action prompts to all
+      // alive night-action roles (wolves, seer, doctor, etc.).
+      const nextGame = await getGame(gameId);
+      if (nextGame && nextGame.status === 'night') {
+        const nightPlayers = await getPlayersForGame(gameId);
+        await dmNightActionsForAlivePlayers({ game: nextGame, players: nightPlayers });
+      }
+
       return;
     }
 
@@ -208,11 +230,20 @@ async function maybeResolveDay(gameId: string): Promise<void> {
       ];
 
       if (win) {
+        const wolfMentions =
+          win.wolves.length > 0
+            ? win.wolves.map((p) => `<@${p.user_id}>`).join(', ')
+            : null;
+
         lines.push(
           win.winner === 'town'
             ? 'Town has eliminated all werewolves. Town wins!'
             : 'Wolves now control the village. Wolves win!',
         );
+
+        if (wolfMentions) {
+          lines.push(`The werewolves were: ${wolfMentions}.`);
+        }
       } else {
         lines.push('Night falls...');
       }
@@ -234,6 +265,13 @@ async function maybeResolveDay(gameId: string): Promise<void> {
 
     // No winner yet: advance to the next phase (day -> night).
     await advancePhase(gameId);
+
+    // After flipping to night, DM fresh night-action prompts.
+    const nextGame = await getGame(gameId);
+    if (nextGame && nextGame.status === 'night') {
+      const nightPlayers = await getPlayersForGame(gameId);
+      await dmNightActionsForAlivePlayers({ game: nextGame, players: nightPlayers });
+    }
   } catch (err) {
     console.error('Error resolving day phase', err);
   }

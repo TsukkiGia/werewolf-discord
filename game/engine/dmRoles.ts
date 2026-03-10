@@ -8,7 +8,11 @@ import type { GamePlayerState } from '../../db/players.js';
 import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
 import { DiscordRequest } from '../../utils.js';
 
-async function getDisplayName(userId: string, guildId: string | null): Promise<string> {
+// Cache display names per user ID for the lifetime of the process so we don't
+// spam the Discord API (and hit rate limits) when building option lists.
+const displayNameCache = new Map<string, Promise<string>>();
+
+async function fetchDisplayName(userId: string, guildId: string | null): Promise<string> {
   // Prefer guild nickname/username when we know the guild
   if (guildId) {
     try {
@@ -36,6 +40,15 @@ async function getDisplayName(userId: string, guildId: string | null): Promise<s
 
   // Last resort: show raw ID
   return userId;
+}
+
+async function getDisplayName(userId: string, guildId: string | null): Promise<string> {
+  const existing = displayNameCache.get(userId);
+  if (existing) return existing;
+
+  const promise = fetchDisplayName(userId, guildId);
+  displayNameCache.set(userId, promise);
+  return promise;
 }
 
 export async function dmRolesAndNightActions(params: {
@@ -115,6 +128,41 @@ export async function dmRolesAndNightActions(params: {
       }
     }),
   );
+}
+
+/**
+ * DM night-action prompts to all alive players who actually have
+ * a night action (werewolves, seer, doctor, etc.) using the current
+ * game state from the database.
+ */
+export async function dmNightActionsForAlivePlayers(params: {
+  game: GameRow;
+  players: GamePlayerState[];
+}): Promise<void> {
+  const { game, players } = params;
+
+  const alivePlayers = players.filter((p) => p.is_alive);
+  if (alivePlayers.length === 0) return;
+
+  const targetIds = alivePlayers.map((p) => p.user_id);
+
+  const assignments: AssignedRole[] = alivePlayers
+    .map((p) => {
+      const def = ROLE_REGISTRY[p.role as keyof typeof ROLE_REGISTRY];
+      if (!def || def.nightAction.kind === 'none') {
+        return null;
+      }
+      return {
+        userId: p.user_id,
+        role: def.name,
+        alignment: def.alignment,
+      };
+    })
+    .filter((a): a is AssignedRole => a !== null);
+
+  if (assignments.length === 0) return;
+
+  await dmRolesAndNightActions({ game, playerIds: targetIds, assignments });
 }
 
 export async function dmDayVotePrompts(params: {
@@ -207,4 +255,3 @@ export async function startDayVoting(params: {
     console.error('Failed to send day voting start message', err);
   }
 }
-

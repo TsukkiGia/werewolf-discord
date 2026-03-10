@@ -17,13 +17,13 @@ export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
 
   // For now, do not randomize order: the first joined player
   // (as provided by the caller) will get the first role in the setup.
-  // const shuffledPlayers = shuffle(playerIds);
+  const shuffledPlayers = shuffle(playerIds);
   const setup = chooseSetup(playerIds.length);
 
   const assignments: AssignedRole[] = [];
 
   for (let i = 0; i < playerIds.length; i += 1) {
-    const userId = playerIds[i]!;
+    const userId = shuffledPlayers[i]!;
     const role = setup[i];
     if (!role) {
       throw new Error('chooseSetup did not return enough roles for all players');
