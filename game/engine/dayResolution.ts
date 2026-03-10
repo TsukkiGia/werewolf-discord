@@ -40,3 +40,58 @@ export function chooseLynchVictim(
   return null;
 }
 
+export type DayResolutionState = 'pending' | 'no_lynch' | 'lynch';
+
+export interface DayResolutionResultPending {
+  state: 'pending';
+}
+
+export interface DayResolutionResultNoLynch {
+  state: 'no_lynch';
+}
+
+export interface DayResolutionResultLynch {
+  state: 'lynch';
+  lynchId: string;
+}
+
+export type DayResolutionResult =
+  | DayResolutionResultPending
+  | DayResolutionResultNoLynch
+  | DayResolutionResultLynch;
+
+/**
+ * Evaluate the current day votes and decide whether:
+ * - the day is still pending (not everyone has voted),
+ * - there is a majority lynch target,
+ * - or the day ends in a no-lynch.
+ *
+ * This is pure game logic; side-effects (messages, DB writes) live in app.ts.
+ */
+export function evaluateDayResolution(
+  players: GamePlayerState[],
+  votes: DayVoteRow[],
+): DayResolutionResult {
+  const aliveIds = new Set(
+    players.filter((p) => p.is_alive).map((p) => p.user_id),
+  );
+  const aliveCount = aliveIds.size;
+
+  const votedIds = new Set(
+    votes
+      .filter((v) => aliveIds.has(v.voter_id) && aliveIds.has(v.target_id))
+      .map((v) => v.voter_id),
+  );
+
+  if (votedIds.size < aliveCount) {
+    return { state: 'pending' };
+  }
+
+  const lynchId = chooseLynchVictim(players, votes);
+  if (!lynchId) {
+    return { state: 'no_lynch' };
+  }
+
+  return { state: 'lynch', lynchId };
+}
+

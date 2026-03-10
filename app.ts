@@ -33,8 +33,8 @@ import {
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
 import { dmRolesAndNightActions, startDayVoting } from './game/engine/dmRoles.js';
-import { chooseKillVictim } from './game/engine/nightResolution.js';
-import { chooseLynchVictim } from './game/engine/dayResolution.js';
+import { chooseKillVictim, evaluateNightResolution } from './game/engine/nightResolution.js';
+import { evaluateDayResolution } from './game/engine/dayResolution.js';
 import { evaluateWinCondition } from './game/engine/winConditions.js';
 import { buildStatusLines } from './game/engine/status.js';
 import { getInteractionUserId, getGuildAndChannelIds } from './interactionHelpers.js';
@@ -65,34 +65,16 @@ async function maybeResolveNight(gameId: string): Promise<void> {
     const nightNumber = game.current_night || 1;
 
     const players = await getPlayersForGame(gameId);
-
-    const requiredActors = players.filter((p) => {
-      if (!p.is_alive) return false;
-      const def = ROLE_REGISTRY[p.role as keyof typeof ROLE_REGISTRY];
-      if (!def) return false;
-      return def.nightAction.kind !== 'none';
-    });
-
-    const requiredActorIds = new Set(requiredActors.map((p) => p.user_id));
-
     const actions = await getNightActionsForNight(gameId, nightNumber);
-    const actedIds = new Set(actions.map((a) => a.actor_id));
 
-    // Wait until all required night-action roles have acted.
-    for (const actorId of requiredActorIds) {
-      if (!actedIds.has(actorId)) {
-        return;
-      }
+    const nightResolution = evaluateNightResolution(players, actions);
+    if (nightResolution.state === 'pending') {
+      // Wait until all required night-action roles have acted.
+      return;
     }
 
-    // Everyone has acted; resolve night.
-    const killTargets = actions
-      .filter((a) => a.action_kind === 'kill' && a.target_id)
-      .map((a) => a.target_id as string);
-
-    const protectTargets = actions
-      .filter((a) => a.action_kind === 'protect' && a.target_id)
-      .map((a) => a.target_id as string);
+    // Everyone has acted; resolve night using the derived targets.
+    const { killTargets, protectTargets } = nightResolution;
 
     // Determine final kill victim using engine helper.
     const victimId = chooseKillVictim(killTargets);
@@ -180,10 +162,34 @@ async function maybeResolveDay(gameId: string): Promise<void> {
     const players = await getPlayersForGame(gameId);
     const votes = await getVotesForDay(gameId, dayNumber);
 
-    const lynchId = chooseLynchVictim(players, votes);
-    if (!lynchId) {
-      return; // no majority yet
+    const resolution = evaluateDayResolution(players, votes);
+    if (resolution.state === 'pending') {
+      // Still waiting for all alive players to vote.
+      return;
     }
+
+    if (resolution.state === 'no_lynch') {
+      if (game.channel_id) {
+        const lines: string[] = [
+          `Day ${dayNumber} ends with no majority. No one is lynched.`,
+          'Night falls...',
+        ];
+
+        try {
+          await DiscordRequest(`channels/${game.channel_id}/messages`, {
+            method: 'POST',
+            body: { content: lines.join('\n') },
+          });
+        } catch (err) {
+          console.error('Failed to send no-lynch day resolution message', err);
+        }
+      }
+
+      await advancePhase(gameId); // day -> night
+      return;
+    }
+
+    const lynchId = resolution.lynchId;
 
     const lynched = players.find((p) => p.user_id === lynchId);
     if (!lynched || !lynched.is_alive) {

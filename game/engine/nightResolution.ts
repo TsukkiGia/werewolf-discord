@@ -1,3 +1,7 @@
+import type { GamePlayerState } from '../../db/players.js';
+import type { NightActionRow } from '../../db/nightActions.js';
+import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
+
 /**
  * Choose the final night-kill victim from a list of target user IDs.
  *
@@ -28,5 +32,65 @@ export function chooseKillVictim(killTargets: string[]): string | null {
   }
 
   return bestId;
+}
+
+export type NightResolutionState = 'pending' | 'ready';
+
+export interface NightResolutionResultPending {
+  state: 'pending';
+}
+
+export interface NightResolutionResultReady {
+  state: 'ready';
+  killTargets: string[];
+  protectTargets: string[];
+}
+
+export type NightResolutionResult =
+  | NightResolutionResultPending
+  | NightResolutionResultReady;
+
+/**
+ * Evaluate whether the night phase is ready to be resolved and, if so,
+ * compute the kill and protect target lists.
+ *
+ * Rules:
+ * - Only alive players with a non-`none` nightAction are required actors.
+ * - Night is "pending" until all required actors have an entry in night_actions.
+ * - Once ready, returns the raw kill/protect targets derived from actions.
+ */
+export function evaluateNightResolution(
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+): NightResolutionResult {
+  const requiredActors = players.filter((p) => {
+    if (!p.is_alive) return false;
+    const def = ROLE_REGISTRY[p.role as keyof typeof ROLE_REGISTRY];
+    if (!def) return false;
+    return def.nightAction.kind !== 'none';
+  });
+
+  const requiredActorIds = new Set(requiredActors.map((p) => p.user_id));
+  const actedIds = new Set(actions.map((a) => a.actor_id));
+
+  for (const actorId of requiredActorIds) {
+    if (!actedIds.has(actorId)) {
+      return { state: 'pending' };
+    }
+  }
+
+  const killTargets = actions
+    .filter((a) => a.action_kind === 'kill' && a.target_id)
+    .map((a) => a.target_id as string);
+
+  const protectTargets = actions
+    .filter((a) => a.action_kind === 'protect' && a.target_id)
+    .map((a) => a.target_id as string);
+
+  return {
+    state: 'ready',
+    killTargets,
+    protectTargets,
+  };
 }
 
