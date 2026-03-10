@@ -79,7 +79,8 @@ export async function getNightActionsForNight(
 
 /**
  * Process all seer-type night actions by DMing inspection results.
- * Only reveals info for targets that are still alive.
+ * Players is the pre-kill snapshot so seers always receive their result,
+ * even if their target is killed later the same night.
  */
 export async function processSeerActions(
   players: GamePlayerState[],
@@ -92,7 +93,7 @@ export async function processSeerActions(
   await Promise.all(
     inspectActions.map(async (action) => {
       const target = players.find((p) => p.user_id === action.target_id);
-      if (!target || !target.is_alive) return;
+      if (!target) return;
 
       try {
         const dmRes = await DiscordRequest('users/@me/channels', {

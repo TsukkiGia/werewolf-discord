@@ -22,8 +22,9 @@ async function fetchDisplayName(userId: string, guildId: string | null): Promise
       const member = (await res.json()) as {
         nick: string | null;
         user: { username: string };
+        global_name: string
       };
-      return member.nick ?? member.user.username;
+      return member.global_name ?? member.nick ?? member.user.username;
     } catch (err) {
       console.error('Failed to fetch guild member', guildId, userId, err);
     }
@@ -32,8 +33,8 @@ async function fetchDisplayName(userId: string, guildId: string | null): Promise
   // Fallback to global username
   try {
     const res = await DiscordRequest(`users/${userId}`, { method: 'GET' });
-    const user = (await res.json()) as { username: string };
-    return user.username;
+    const user = (await res.json()) as { username: string , global_name: string};
+    return user.global_name ?? user.username;
   } catch (err) {
     console.error('Failed to fetch user', userId, err);
   }

@@ -17,6 +17,7 @@ import {
 } from '../db.js';
 import { DiscordRequest } from '../utils.js';
 import { dmRolesAndNightActions } from '../game/engine/dmRoles.js';
+import { scheduleNightTimeout } from '../jobs/nightTimeout.js';
 import { buildStatusLines } from '../game/engine/status.js';
 import { getInteractionUserId, getGuildAndChannelIds } from '../interactionHelpers.js';
 
@@ -242,6 +243,7 @@ export async function handleWwStart(req: any, res: any): Promise<any> {
   const aliveTargetIds = playersForTargets.filter((p) => p.is_alive).map((p) => p.user_id);
 
   await dmRolesAndNightActions({ game, playerIds: aliveTargetIds, assignments });
+  await scheduleNightTimeout(game.id, 1); // startGame increments current_night 0 → 1
 
   const playersText =
     playerIds.length > 0

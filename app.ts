@@ -2,6 +2,9 @@ import 'dotenv/config';
 import express from 'express';
 import { InteractionType, InteractionResponseType, verifyKeyMiddleware } from 'discord-interactions';
 import { initDb } from './db.js';
+import { boss, registerWorkers } from './jobs/dayVoting.js';
+import { registerNightWorker } from './jobs/nightTimeout.js';
+import { maybeResolveNight } from './game/engine/gameOrchestrator.js';
 import {
   handleWwCreate,
   handleWwEnd,
@@ -13,6 +16,9 @@ import { handleJoinButton, handleNightAction, handleDayVote } from './handlers/c
 
 // Ensure database schema exists before handling traffic
 await initDb();
+await boss.start();
+await registerWorkers();
+await registerNightWorker(maybeResolveNight);
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;

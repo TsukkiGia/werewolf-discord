@@ -18,23 +18,9 @@ import {
   buildNightFallsLine,
   buildNoLynchLine,
 } from './status.js';
-import { dmNightActionsForAlivePlayers, startDayVoting } from './dmRoles.js';
-
-export function scheduleDayVoting(gameId: string, dayNumber: number): void {
-  // In-memory timer: if the process restarts, the scheduled call is lost.
-  setTimeout(async () => {
-    try {
-      const game = await getGame(gameId);
-      if (!game || game.status !== 'day') return;
-      if ((game.current_day || 0) !== dayNumber) return;
-
-      const players = await getPlayersForGame(gameId);
-      await startDayVoting({ game, players, dayNumber });
-    } catch (err) {
-      console.error('Error scheduling day voting', err);
-    }
-  }, 60_000);
-}
+import { dmNightActionsForAlivePlayers } from './dmRoles.js';
+import { scheduleDayVoting } from '../../jobs/dayVoting.js';
+import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
 
 export async function advanceToNightAndDmNightActions(gameId: string): Promise<void> {
   await advancePhase(gameId); // day -> night
@@ -46,6 +32,7 @@ export async function advanceToNightAndDmNightActions(gameId: string): Promise<v
 
   const nightPlayers = await getPlayersForGame(gameId);
   await dmNightActionsForAlivePlayers({ game: nextGame, players: nightPlayers });
+  await scheduleNightTimeout(gameId, nextGame.current_night);
 }
 
 export async function maybeResolveNight(gameId: string): Promise<void> {
