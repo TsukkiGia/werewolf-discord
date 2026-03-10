@@ -163,6 +163,24 @@ async function maybeResolveNight(gameId: string): Promise<void> {
   }
 }
 
+/**
+ * Advance the game from day to night and DM fresh night-action prompts
+ * to all alive players who have night actions (wolves, seer, doctor, etc.).
+ */
+async function advanceToNightAndDmNightActions(gameId: string): Promise<void> {
+  // Flip phase first.
+  await advancePhase(gameId); // day -> night
+
+  // Re-read game and players in the new phase.
+  const nextGame = await getGame(gameId);
+  if (!nextGame || nextGame.status !== 'night') {
+    return;
+  }
+
+  const nightPlayers = await getPlayersForGame(gameId);
+  await dmNightActionsForAlivePlayers({ game: nextGame, players: nightPlayers });
+}
+
 async function maybeResolveDay(gameId: string): Promise<void> {
   try {
     const game = await getGame(gameId);
@@ -198,16 +216,7 @@ async function maybeResolveDay(gameId: string): Promise<void> {
         }
       }
 
-      await advancePhase(gameId); // day -> night
-
-      // After flipping to night, DM fresh night-action prompts to all
-      // alive night-action roles (wolves, seer, doctor, etc.).
-      const nextGame = await getGame(gameId);
-      if (nextGame && nextGame.status === 'night') {
-        const nightPlayers = await getPlayersForGame(gameId);
-        await dmNightActionsForAlivePlayers({ game: nextGame, players: nightPlayers });
-      }
-
+      await advanceToNightAndDmNightActions(gameId);
       return;
     }
 
@@ -263,15 +272,9 @@ async function maybeResolveDay(gameId: string): Promise<void> {
       return;
     }
 
-    // No winner yet: advance to the next phase (day -> night).
-    await advancePhase(gameId);
-
-    // After flipping to night, DM fresh night-action prompts.
-    const nextGame = await getGame(gameId);
-    if (nextGame && nextGame.status === 'night') {
-      const nightPlayers = await getPlayersForGame(gameId);
-      await dmNightActionsForAlivePlayers({ game: nextGame, players: nightPlayers });
-    }
+    // No winner yet: advance to the next phase (day -> night)
+    // and DM fresh night-action prompts.
+    await advanceToNightAndDmNightActions(gameId);
   } catch (err) {
     console.error('Error resolving day phase', err);
   }
