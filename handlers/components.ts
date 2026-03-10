@@ -102,7 +102,7 @@ export async function handleNightAction(req: any, res: any, componentId: string)
 
   const def = ROLE_REGISTRY[role as keyof typeof ROLE_REGISTRY];
 
-  await recordNightAction({
+  const inserted = await recordNightAction({
     gameId,
     night: nightNumber,
     actorId,
@@ -110,6 +110,16 @@ export async function handleNightAction(req: any, res: any, componentId: string)
     actionKind: def.nightAction.kind,
     role: def.name,
   });
+
+  if (!inserted) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'You have already submitted your night action. It cannot be changed.',
+      },
+    });
+  }
 
   const verb =
     def.nightAction.kind === 'kill'
@@ -192,7 +202,14 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
     });
   }
 
-  await recordDayVote({ gameId: game.id, day: dayNumber, voterId: actorId, targetId });
+  const inserted = await recordDayVote({ gameId: game.id, day: dayNumber, voterId: actorId, targetId });
+
+  if (!inserted) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: { content: 'You have already voted today. Your vote cannot be changed.' },
+    });
+  }
 
   res.send({
     type: InteractionResponseType.UPDATE_MESSAGE,
