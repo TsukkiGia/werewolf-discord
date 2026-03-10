@@ -1,6 +1,6 @@
 import { pool } from './client.js';
 
-export type GameStatus = 'lobby' | 'running' | 'ended';
+export type GameStatus = 'lobby' | 'night' | 'day' | 'ended';
 
 export interface GameRow {
   id: string;
@@ -79,7 +79,33 @@ export async function startGame(gameId: string): Promise<void> {
         started_at = $2
     WHERE id = $3
     `,
-    ['running', startedAt, gameId],
+    ['night', startedAt, gameId],
   );
 }
 
+export function nextPhase(status: GameStatus): GameStatus {
+  if (status === 'lobby') return 'night';
+  if (status === 'night') return 'day';
+  if (status === 'day') return 'night';
+  return status;
+}
+
+export async function advancePhase(gameId: string): Promise<GameStatus | null> {
+  const game = await getGame(gameId);
+  if (!game || game.status === 'ended') {
+    return null;
+  }
+
+  const newStatus = nextPhase(game.status);
+
+  await pool.query(
+    `
+    UPDATE games
+    SET status = $1
+    WHERE id = $2
+    `,
+    [newStatus, gameId],
+  );
+
+  return newStatus;
+}

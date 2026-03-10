@@ -183,6 +183,7 @@ app.post(
 
         const messageLines = [
           `Game status for this channel:`,
+          `Phase: ${game.status}`,
           `Host: <@${game.host_id}>`,
           `Players (${playerIds.length}):`,
           playersText,
