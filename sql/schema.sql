@@ -9,6 +9,12 @@ CREATE TABLE IF NOT EXISTS games (
   ended_at BIGINT
 );
 
+ALTER TABLE games
+  ADD COLUMN IF NOT EXISTS current_day INTEGER NOT NULL DEFAULT 0;
+
+ALTER TABLE games
+  ADD COLUMN IF NOT EXISTS current_night INTEGER NOT NULL DEFAULT 0;
+
 CREATE TABLE IF NOT EXISTS game_players (
   id SERIAL PRIMARY KEY,
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
@@ -42,4 +48,3 @@ CREATE TABLE IF NOT EXISTS day_votes (
   created_at BIGINT NOT NULL,
   UNIQUE (game_id, day, voter_id)
 );
-
