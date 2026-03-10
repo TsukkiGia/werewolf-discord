@@ -11,6 +11,8 @@ export interface GameRow {
   created_at: number;
   started_at: number | null;
   ended_at: number | null;
+  current_day: number;
+  current_night: number;
 }
 
 export async function createGame(params: {
@@ -22,8 +24,8 @@ export async function createGame(params: {
   const createdAt = Date.now();
   await pool.query(
     `
-    INSERT INTO games (id, guild_id, channel_id, host_id, status, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6)
+    INSERT INTO games (id, guild_id, channel_id, host_id, status, created_at, current_day, current_night)
+    VALUES ($1, $2, $3, $4, $5, $6, 0, 0)
     ON CONFLICT (id) DO NOTHING
     `,
     [params.id, params.guildId, params.channelId, params.hostId, 'lobby', createdAt],
@@ -76,7 +78,8 @@ export async function startGame(gameId: string): Promise<void> {
     `
     UPDATE games
     SET status = $1,
-        started_at = $2
+        started_at = $2,
+        current_night = current_night + 1
     WHERE id = $3
     `,
     ['night', startedAt, gameId],
@@ -98,13 +101,26 @@ export async function advancePhase(gameId: string): Promise<GameStatus | null> {
 
   const newStatus = nextPhase(game.status);
 
+  let newDay = game.current_day;
+  let newNight = game.current_night;
+
+  if (game.status === 'lobby' && newStatus === 'night') {
+    newNight += 1;
+  } else if (game.status === 'night' && newStatus === 'day') {
+    newDay += 1;
+  } else if (game.status === 'day' && newStatus === 'night') {
+    newNight += 1;
+  }
+
   await pool.query(
     `
     UPDATE games
-    SET status = $1
-    WHERE id = $2
+    SET status = $1,
+        current_day = $2,
+        current_night = $3
+    WHERE id = $4
     `,
-    [newStatus, gameId],
+    [newStatus, newDay, newNight, gameId],
   );
 
   return newStatus;

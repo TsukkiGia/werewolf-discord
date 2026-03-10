@@ -42,7 +42,7 @@ async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
-    const nightNumber = 1; // TODO: support multiple nights
+    const nightNumber = game.current_night || 1;
 
     const players = await getPlayersForGame(gameId);
 
@@ -94,6 +94,7 @@ async function maybeResolveNight(gameId: string): Promise<void> {
     // Re-read players after applying night kills and evaluate win conditions.
     const updatedPlayers = await getPlayersForGame(gameId);
     const win = evaluateWinCondition(updatedPlayers);
+    const upcomingDay = (game.current_day || 0) + 1;
 
     if (game.channel_id) {
       const victims = updatedPlayers.filter((p) => killedIds.includes(p.user_id));
@@ -117,7 +118,7 @@ async function maybeResolveNight(gameId: string): Promise<void> {
             : 'Wolves now control the village. Wolves win!',
         );
       } else {
-        lines.push('Day begins. Discuss and prepare to vote.');
+        lines.push(`Day ${upcomingDay} begins. Discuss and prepare to vote.`);
       }
 
       try {
@@ -156,7 +157,7 @@ async function maybeResolveDay(gameId: string): Promise<void> {
       return;
     }
 
-    const dayNumber = 1; // TODO: support multiple days
+    const dayNumber = game.current_day || 1;
 
     const players = await getPlayersForGame(gameId);
     const votes = await getVotesForDay(gameId, dayNumber);
@@ -525,11 +526,17 @@ app.post(
 	            return res.status(400).json({ error: 'invalid night action payload' });
 	          }
 
+            const gameForNight = await getGame(gameId);
+
+            if (!gameForNight || gameForNight.status !== 'night') {
+              return res.status(400).json({ error: 'no active night for this game' });
+            }
+
           const def = ROLE_REGISTRY[role as keyof typeof ROLE_REGISTRY];
 
           await recordNightAction({
             gameId,
-            night: 1,
+            night: gameForNight.current_night || 1,
             actorId,
             targetId,
             actionKind: def.nightAction.kind,
@@ -600,7 +607,7 @@ app.post(
           // Record or update the player’s vote for this day.
           await recordDayVote({
             gameId: game.id,
-            day: 1,
+            day: game.current_day || 1,
             voterId: actorId,
             targetId,
           });
