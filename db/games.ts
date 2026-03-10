@@ -84,18 +84,21 @@ export async function endGame(gameId: string): Promise<void> {
   );
 }
 
-export async function startGame(gameId: string): Promise<void> {
+export async function startGame(gameId: string): Promise<boolean> {
   const startedAt = Date.now();
-  await pool.query(
+  const result = await pool.query(
     `
     UPDATE games
     SET status = $1,
         started_at = $2,
         current_night = current_night + 1
-    WHERE id = $3
+    WHERE id = $3 AND status = 'lobby'
     `,
     ['night', startedAt, gameId],
   );
+
+  // rowCount can be null in the pg typings, so normalize to 0.
+  return (result.rowCount ?? 0) > 0;
 }
 
 export function nextPhase(status: GameStatus): GameStatus {

@@ -504,8 +504,6 @@ app.post(
           });
         }
 
-        const assignments = await assignRolesForGame(game.id);
-
         // Before moving out of the lobby, patch the original Join message (if any)
         // to remove the Join button and show that joining is closed.
         if (game.channel_id && game.join_message_id) {
@@ -525,7 +523,17 @@ app.post(
           }
         }
 
-        await startGame(game.id);
+        const didStart = await startGame(game.id);
+        if (!didStart) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: 'This game has already been started.',
+            },
+          });
+        }
+
+        const assignments = await assignRolesForGame(game.id);
 
         // Re-read players to know who is alive; night-action target lists should only
         // include currently-alive players.
