@@ -137,3 +137,16 @@ export async function endGame(gameId: string): Promise<void> {
   );
 }
 
+export async function startGame(gameId: string): Promise<void> {
+  const startedAt = Date.now();
+  await pool.query(
+    `
+    UPDATE games
+    SET status = $1,
+        started_at = $2
+    WHERE id = $3
+    `,
+    ['running', startedAt, gameId],
+  );
+}
+

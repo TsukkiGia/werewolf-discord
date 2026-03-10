@@ -16,6 +16,7 @@ import {
   getActiveGameForChannel,
   getPlayerIdsForGame,
   endGame,
+  startGame,
 } from './db.js';
 
 // Ensure database schema exists before handling traffic
@@ -188,6 +189,51 @@ app.post(
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
             content: messageLines.join('\n'),
+          },
+        });
+      }
+
+      if (name === 'ww_start') {
+        const guildId: string | null = req.body.guild_id ?? null;
+        const channelId: string | null = req.body.channel?.id ?? null;
+
+        const game = await getActiveGameForChannel(guildId, channelId);
+
+        if (!game) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              flags: InteractionResponseFlags.EPHEMERAL,
+              content: 'There is no active Werewolf game in this channel to start.',
+            },
+          });
+        }
+
+        const context = req.body.context;
+        const userId = context === 0 ? req.body.member.user.id : req.body.user.id;
+
+        if (userId !== game.host_id) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              flags: InteractionResponseFlags.EPHEMERAL,
+              content: `Only the host <@${game.host_id}> can start this game.`,
+            },
+          });
+        }
+
+        await startGame(game.id);
+
+        const playerIds = await getPlayerIdsForGame(game.id);
+        const playersText =
+          playerIds.length > 0
+            ? playerIds.map((id: string) => `<@${id}>`).join(', ')
+            : 'No players (this should not happen).';
+
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: `The Werewolf game has started!\nHost: <@${game.host_id}>\nPlayers: ${playersText}`,
           },
         });
       }

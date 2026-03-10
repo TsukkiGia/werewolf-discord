@@ -29,6 +29,11 @@ const WW_COMMANDS: SlashCommand[] = [
     description: 'Show the current Werewolf game status in this channel',
     type: 1, // CHAT_INPUT
   },
+  {
+    name: 'ww_start',
+    description: 'Start the current Werewolf game in this channel',
+    type: 1, // CHAT_INPUT
+  },
 ];
 
 async function main() {
