@@ -8,7 +8,14 @@ import {
   ButtonStyleTypes,
   MessageComponentTypes,
 } from 'discord-interactions';
-import { initDb, createGame, addPlayer, getGame } from './db.js';
+import {
+  initDb,
+  createGame,
+  addPlayer,
+  getGame,
+  getActiveGameForChannel,
+  getPlayerIdsForGame,
+} from './db.js';
 
 // Ensure database schema exists before handling traffic
 await initDb();
@@ -103,6 +110,42 @@ app.post(
           type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
           data: {
             content: 'Help command not implemented yet.',
+          },
+        });
+      }
+
+      if (name === 'ww_status') {
+        const guildId: string | null = req.body.guild_id ?? null;
+        const channelId: string | null = req.body.channel?.id ?? null;
+
+        const game = await getActiveGameForChannel(guildId, channelId);
+
+        if (!game) {
+          return res.send({
+            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+            data: {
+              content: 'There is no active Werewolf game in this channel.',
+            },
+          });
+        }
+
+        const playerIds = await getPlayerIdsForGame(game.id);
+        const playersText =
+          playerIds.length > 0
+            ? playerIds.map((id: string) => `<@${id}>`).join('\n')
+            : 'No players have joined yet.';
+
+        const messageLines = [
+          `Game status for this channel:`,
+          `Host: <@${game.host_id}>`,
+          `Players (${playerIds.length}):`,
+          playersText,
+        ];
+
+        return res.send({
+          type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+          data: {
+            content: messageLines.join('\n'),
           },
         });
       }

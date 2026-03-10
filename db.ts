@@ -88,3 +88,39 @@ export async function addPlayer(gameId: string, userId: string): Promise<void> {
   );
 }
 
+export async function getActiveGameForChannel(
+  guildId: string | null,
+  channelId: string | null,
+): Promise<GameRow | null> {
+  if (!channelId) return null;
+
+  const result = await pool.query<GameRow>(
+    `
+    SELECT *
+    FROM games
+    WHERE channel_id = $1
+      AND ($2::text IS NULL OR guild_id = $2)
+      AND status <> 'ended'
+    ORDER BY created_at DESC
+    LIMIT 1
+    `,
+    [channelId, guildId],
+  );
+
+  return result.rows[0] ?? null;
+}
+
+export async function getPlayerIdsForGame(gameId: string): Promise<string[]> {
+  const result = await pool.query<{ user_id: string }>(
+    `
+    SELECT user_id
+    FROM game_players
+    WHERE game_id = $1
+    ORDER BY joined_at ASC
+    `,
+    [gameId],
+  );
+
+  return result.rows.map((row) => row.user_id);
+}
+
