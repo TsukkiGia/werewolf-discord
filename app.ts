@@ -30,10 +30,26 @@ import {
 } from './db.js';
 import { DiscordRequest } from './utils.js';
 import { ROLE_REGISTRY } from './game/balancing/roleRegistry.js';
-import { dmRolesAndNightActions, dmDayVotePrompts } from './game/engine/dmRoles.js';
+import { dmRolesAndNightActions, startDayVoting } from './game/engine/dmRoles.js';
 import { chooseKillVictim } from './game/engine/nightResolution.js';
 import { chooseLynchVictim } from './game/engine/dayResolution.js';
 import { evaluateWinCondition } from './game/engine/winConditions.js';
+
+function scheduleDayVoting(gameId: string, dayNumber: number): void {
+  // In-memory timer: if the process restarts, the scheduled call is lost.
+  setTimeout(async () => {
+    try {
+      const game = await getGame(gameId);
+      if (!game || game.status !== 'day') return;
+      if ((game.current_day || 0) !== dayNumber) return;
+
+      const players = await getPlayersForGame(gameId);
+      await startDayVoting({ game, players, dayNumber });
+    } catch (err) {
+      console.error('Error scheduling day voting', err);
+    }
+  }, 60_000);
+}
 
 async function maybeResolveNight(gameId: string): Promise<void> {
   try {
@@ -118,7 +134,9 @@ async function maybeResolveNight(gameId: string): Promise<void> {
             : 'Wolves now control the village. Wolves win!',
         );
       } else {
-        lines.push(`Day ${upcomingDay} begins. Discuss and prepare to vote.`);
+        lines.push(
+          `Day ${upcomingDay} begins. You have 1 minute to discuss before voting starts.`,
+        );
       }
 
       try {
@@ -139,12 +157,8 @@ async function maybeResolveNight(gameId: string): Promise<void> {
     // No winner yet: advance to the next phase (night -> day).
     await advancePhase(gameId);
 
-    // After announcing dawn, DM alive players with a day-vote menu.
-    try {
-      await dmDayVotePrompts({ game, players: updatedPlayers });
-    } catch (err) {
-      console.error('Failed to DM day vote prompts', err);
-    }
+    // After announcing dawn, wait one minute before starting voting.
+    scheduleDayVoting(gameId, upcomingDay);
   } catch (err) {
     console.error('Error resolving night phase', err);
   }

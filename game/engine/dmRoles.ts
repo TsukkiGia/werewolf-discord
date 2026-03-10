@@ -183,3 +183,28 @@ export async function dmDayVotePrompts(params: {
   );
 }
 
+export async function startDayVoting(params: {
+  game: GameRow;
+  players: GamePlayerState[];
+  dayNumber: number;
+}): Promise<void> {
+  const { game, players, dayNumber } = params;
+
+  await dmDayVotePrompts({ game, players });
+
+  if (!game.channel_id) {
+    return;
+  }
+
+  try {
+    await DiscordRequest(`channels/${game.channel_id}/messages`, {
+      method: 'POST',
+      body: {
+        content: `Voting for Day ${dayNumber} begins now. Check your DMs to cast your vote.`,
+      },
+    });
+  } catch (err) {
+    console.error('Failed to send day voting start message', err);
+  }
+}
+
