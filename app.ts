@@ -37,6 +37,7 @@ import { chooseKillVictim } from './game/engine/nightResolution.js';
 import { chooseLynchVictim } from './game/engine/dayResolution.js';
 import { evaluateWinCondition } from './game/engine/winConditions.js';
 import { buildStatusLines } from './game/engine/status.js';
+import { getInteractionUserId, getGuildAndChannelIds } from './interactionHelpers.js';
 
 function scheduleDayVoting(gameId: string, dayNumber: number): void {
   // In-memory timer: if the process restarts, the scheduled call is lost.
@@ -266,16 +267,13 @@ app.post(
       const { name } = data;
 
 	      if (name === 'ww_create' && id) {
-	        const context = req.body.context;
-	        // User ID is in user field for (G)DMs, and member for servers
-	        const userId =
-	          context === 0
-	            ? req.body.member.user.id
-	            : (req.body.user?.id ?? req.body.member?.user?.id);
+	        const userId = getInteractionUserId(req);
+          if (!userId) {
+            return res.status(400).json({ error: 'missing user id' });
+          }
 
 	        const gameId = String(id);
-	        const guildId: string | null = req.body.guild_id ?? null;
-	        const channelId: string | null = req.body.channel?.id ?? null;
+	        const { guildId, channelId } = getGuildAndChannelIds(req);
 
 	        // Enforce only one active game per channel
 	        const existingGame = await getActiveGameForChannel(guildId, channelId);
@@ -324,8 +322,7 @@ app.post(
       }
 
       if (name === 'ww_end') {
-        const guildId: string | null = req.body.guild_id ?? null;
-        const channelId: string | null = req.body.channel?.id ?? null;
+        const { guildId, channelId } = getGuildAndChannelIds(req);
 
         const game = await getActiveGameForChannel(guildId, channelId);
 
@@ -338,11 +335,10 @@ app.post(
           });
         }
 
-        const context = req.body.context;
-        const userId =
-          context === 0
-            ? req.body.member.user.id
-            : (req.body.user?.id ?? req.body.member?.user?.id);
+        const userId = getInteractionUserId(req);
+        if (!userId) {
+          return res.status(400).json({ error: 'missing user id' });
+        }
 
         if (userId !== game.host_id) {
           return res.send({
@@ -393,8 +389,7 @@ app.post(
       }
 
       if (name === 'ww_status') {
-        const guildId: string | null = req.body.guild_id ?? null;
-        const channelId: string | null = req.body.channel?.id ?? null;
+        const { guildId, channelId } = getGuildAndChannelIds(req);
 
         const game = await getActiveGameForChannel(guildId, channelId);
 
@@ -419,8 +414,7 @@ app.post(
       }
 
       if (name === 'ww_start') {
-        const guildId: string | null = req.body.guild_id ?? null;
-        const channelId: string | null = req.body.channel?.id ?? null;
+        const { guildId, channelId } = getGuildAndChannelIds(req);
 
         const game = await getActiveGameForChannel(guildId, channelId);
 
@@ -433,11 +427,10 @@ app.post(
           });
         }
 
-        const context = req.body.context;
-        const userId =
-          context === 0
-            ? req.body.member.user.id
-            : (req.body.user?.id ?? req.body.member?.user?.id);
+        const userId = getInteractionUserId(req);
+        if (!userId) {
+          return res.status(400).json({ error: 'missing user id' });
+        }
 
         if (userId !== game.host_id) {
           return res.send({
@@ -518,11 +511,10 @@ app.post(
 	            });
 	          }
 
-	          const context = req.body.context;
-	          const userId =
-	            context === 0
-	              ? req.body.member.user.id
-	              : (req.body.user?.id ?? req.body.member?.user?.id);
+	          const userId = getInteractionUserId(req);
+            if (!userId) {
+              return res.status(400).json({ error: 'missing user id' });
+            }
 	          await addPlayer(gameId, userId);
 	          return res.send({
 	            type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
@@ -544,8 +536,7 @@ app.post(
 	          const targetId: string | null =
 	            Array.isArray(data.values) && data.values.length > 0 ? data.values[0] : null;
 
-	          const actorId =
-	            req.body.member?.user?.id ?? req.body.user?.id;
+	          const actorId = getInteractionUserId(req);
 
 	          if (!actorId || !gameId || !role) {
 	            return res.status(400).json({ error: 'invalid night action payload' });
@@ -628,7 +619,7 @@ app.post(
             });
           }
 
-          const actorId = req.body.member?.user?.id ?? req.body.user?.id;
+          const actorId = getInteractionUserId(req);
 
           if (!actorId) {
             return res.status(400).json({ error: 'missing voter id' });
