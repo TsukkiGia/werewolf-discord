@@ -51,6 +51,60 @@ export async function DiscordRequest(
   return res;
 }
 
+/**
+ * Open (or reuse) a DM channel with a user and return the channel id.
+ */
+export async function openDmChannel(userId: string): Promise<string> {
+  const dmRes = await DiscordRequest('users/@me/channels', {
+    method: 'POST',
+    body: { recipient_id: userId },
+  });
+  const dmChannel = (await dmRes.json()) as { id: string };
+  return dmChannel.id;
+}
+
+/**
+ * Send a message into a DM channel with the given body.
+ * Body should already respect components v2 rules if using flags.
+ */
+export async function sendDmMessage(
+  userId: string,
+  body: unknown,
+): Promise<Response> {
+  const channelId = await openDmChannel(userId);
+  return DiscordRequest(`channels/${channelId}/messages`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/**
+ * Convenience helper for posting a message into a guild/channel.
+ */
+export async function postChannelMessage(
+  channelId: string,
+  body: unknown,
+): Promise<Response> {
+  return DiscordRequest(`channels/${channelId}/messages`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/**
+ * Convenience helper for PATCHing an existing channel message.
+ */
+export async function patchChannelMessage(
+  channelId: string,
+  messageId: string,
+  body: unknown,
+): Promise<Response> {
+  return DiscordRequest(`channels/${channelId}/messages/${messageId}`, {
+    method: 'PATCH',
+    body,
+  });
+}
+
 export async function InstallGlobalCommands(
   appId: string,
   commands: SlashCommand[],

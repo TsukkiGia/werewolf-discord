@@ -6,7 +6,7 @@ import type { AssignedRole } from '../types.js';
 import type { GameRow } from '../../db/games.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
-import { DiscordRequest } from '../../utils.js';
+import { DiscordRequest, openDmChannel, postChannelMessage } from '../../utils.js';
 import { recordNightActionPrompt } from '../../db/nightActions.js';
 
 // Cache display names per user ID for the lifetime of the process so we don't
@@ -64,11 +64,7 @@ export async function dmRolesAndNightActions(params: {
   await Promise.all(
     assignments.map(async (assignment) => {
       try {
-        const dmRes = await DiscordRequest('users/@me/channels', {
-          method: 'POST',
-          body: { recipient_id: assignment.userId },
-        });
-        const dmChannel = (await dmRes.json()) as { id: string };
+        const dmChannelId = await openDmChannel(assignment.userId);
 
         const def = ROLE_REGISTRY[assignment.role];
         const roleLine = def.dmIntro;
@@ -110,20 +106,17 @@ export async function dmRolesAndNightActions(params: {
         }
 
         if (components.length && hasNightAction) {
-          const msgRes = await DiscordRequest(`channels/${dmChannel.id}/messages`, {
-            method: 'POST',
-            body: {
-              // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
-              // not the legacy `content` field.
-              flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-              components: [
-                {
-                  type: MessageComponentTypes.TEXT_DISPLAY,
-                  content: baseContent,
-                },
-                ...components,
-              ],
-            },
+          const msgRes = await postChannelMessage(dmChannelId, {
+            // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
+            // not the legacy `content` field.
+            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+            components: [
+              {
+                type: MessageComponentTypes.TEXT_DISPLAY,
+                content: baseContent,
+              },
+              ...components,
+            ],
           });
 
           const msg = (await msgRes.json()) as { id?: string };
@@ -132,17 +125,14 @@ export async function dmRolesAndNightActions(params: {
               gameId: game.id,
               night: nightNumber,
               userId: assignment.userId,
-              channelId: dmChannel.id,
+              channelId: dmChannelId,
               messageId: msg.id,
             });
           }
         } else {
-          await DiscordRequest(`channels/${dmChannel.id}/messages`, {
-            method: 'POST',
-            body: {
-              // No components v2 here, so plain content is fine.
-              content: baseContent,
-            },
+          await postChannelMessage(dmChannelId, {
+            // No components v2 here, so plain content is fine.
+            content: baseContent,
           });
         }
       } catch (err) {
@@ -269,11 +259,8 @@ export async function startDayVoting(params: {
   }
 
   try {
-    await DiscordRequest(`channels/${game.channel_id}/messages`, {
-      method: 'POST',
-      body: {
-        content: `Voting for Day ${dayNumber} begins now. Check your DMs to cast your vote.`,
-      },
+    await postChannelMessage(game.channel_id, {
+      content: `Voting for Day ${dayNumber} begins now. Check your DMs to cast your vote.`,
     });
   } catch (err) {
     console.error('Failed to send day voting start message', err);

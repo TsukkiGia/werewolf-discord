@@ -9,7 +9,7 @@ import {
   endGame,
   getVotesForDay,
 } from '../../db.js';
-import { DiscordRequest } from '../../utils.js';
+import { postChannelMessage } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
 import { evaluateDayResolution } from './dayResolution.js';
 import { evaluateWinCondition, buildWinLines } from './winConditions.js';
@@ -92,10 +92,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       }
 
       try {
-        await DiscordRequest(`channels/${game.channel_id}/messages`, {
-          method: 'POST',
-          body: { content: lines.join('\n') },
-        });
+        await postChannelMessage(game.channel_id, { content: lines.join('\n') });
       } catch (err) {
         console.error('Failed to send day summary message', err);
       }
@@ -133,9 +130,8 @@ export async function maybeResolveDay(gameId: string): Promise<void> {
     if (resolution.state === 'no_lynch') {
       if (game.channel_id) {
         try {
-          await DiscordRequest(`channels/${game.channel_id}/messages`, {
-            method: 'POST',
-            body: { content: [buildNoLynchLine(dayNumber), buildNightFallsLine()].join('\n') },
+          await postChannelMessage(game.channel_id, {
+            content: [buildNoLynchLine(dayNumber), buildNightFallsLine()].join('\n'),
           });
         } catch (err) {
           console.error('Failed to send no-lynch day resolution message', err);
@@ -169,10 +165,7 @@ export async function maybeResolveDay(gameId: string): Promise<void> {
       }
 
       try {
-        await DiscordRequest(`channels/${game.channel_id}/messages`, {
-          method: 'POST',
-          body: { content: lines.join('\n') },
-        });
+        await postChannelMessage(game.channel_id, { content: lines.join('\n') });
       } catch (err) {
         console.error('Failed to send day resolution message', err);
       }

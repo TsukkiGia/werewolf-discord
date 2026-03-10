@@ -1,7 +1,7 @@
 import { pool } from './client.js';
 import type { NightActionKind, RoleName } from '../game/types.js';
 import type { GamePlayerState } from './players.js';
-import { DiscordRequest } from '../utils.js';
+import { DiscordRequest, openDmChannel, postChannelMessage } from '../utils.js';
 
 export interface NightActionRow {
   id: number;
@@ -12,6 +12,14 @@ export interface NightActionRow {
   action_kind: NightActionKind;
   role: RoleName;
   created_at: number;
+}
+
+export interface NightActionPromptRow {
+  game_id: string;
+  night: number;
+  user_id: string;
+  channel_id: string;
+  message_id: string;
 }
 
 export async function recordNightAction(params: {
@@ -77,6 +85,41 @@ export async function getNightActionsForNight(
   return result.rows;
 }
 
+export async function recordNightActionPrompt(params: {
+  gameId: string;
+  night: number;
+  userId: string;
+  channelId: string;
+  messageId: string;
+}): Promise<void> {
+  await pool.query(
+    `
+    INSERT INTO night_action_prompts (game_id, night, user_id, channel_id, message_id)
+    VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (game_id, night, user_id)
+    DO UPDATE SET channel_id = EXCLUDED.channel_id,
+                  message_id = EXCLUDED.message_id
+    `,
+    [params.gameId, params.night, params.userId, params.channelId, params.messageId],
+  );
+}
+
+export async function getNightActionPromptsForNight(
+  gameId: string,
+  night: number,
+): Promise<NightActionPromptRow[]> {
+  const result = await pool.query<NightActionPromptRow>(
+    `
+    SELECT game_id, night, user_id, channel_id, message_id
+    FROM night_action_prompts
+    WHERE game_id = $1 AND night = $2
+    `,
+    [gameId, night],
+  );
+
+  return result.rows;
+}
+
 /**
  * Process all seer-type night actions by DMing inspection results.
  * Players is the pre-kill snapshot so seers always receive their result,
@@ -96,17 +139,9 @@ export async function processSeerActions(
       if (!target) return;
 
       try {
-        const dmRes = await DiscordRequest('users/@me/channels', {
-          method: 'POST',
-          body: { recipient_id: action.actor_id },
-        });
-        const dmChannel = (await dmRes.json()) as { id: string };
-
-        await DiscordRequest(`channels/${dmChannel.id}/messages`, {
-          method: 'POST',
-          body: {
-            content: `Your vision reveals that <@${target.user_id}> is **${target.role}**.`,
-          },
+        const dmChannelId = await openDmChannel(action.actor_id);
+        await postChannelMessage(dmChannelId, {
+          content: `Your vision reveals that <@${target.user_id}> is **${target.role}**.`,
         });
       } catch (err) {
         console.error('Failed to DM seer inspection result', err);
@@ -147,16 +182,8 @@ export async function processDoctorActions(
             : `You protected <@${targetId}>. They were not attacked tonight.`;
 
       try {
-        const dmRes = await DiscordRequest('users/@me/channels', {
-          method: 'POST',
-          body: { recipient_id: action.actor_id },
-        });
-        const dmChannel = (await dmRes.json()) as { id: string };
-
-        await DiscordRequest(`channels/${dmChannel.id}/messages`, {
-          method: 'POST',
-          body: { content: base },
-        });
+        const dmChannelId = await openDmChannel(action.actor_id);
+        await postChannelMessage(dmChannelId, { content: base });
       } catch (err) {
         console.error('Failed to DM doctor protection result', err);
       }

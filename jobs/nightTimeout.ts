@@ -8,7 +8,7 @@ import {
   getNightActionPromptsForNight,
 } from '../db.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
-import { DiscordRequest } from '../utils.js';
+import { DiscordRequest, patchChannelMessage } from '../utils.js';
 import {
   InteractionResponseFlags,
   MessageComponentTypes,
@@ -73,22 +73,16 @@ export async function registerNightWorker(
         .filter((prompt) => !actedIds.has(prompt.user_id))
         .map(async (prompt) => {
           try {
-            await DiscordRequest(
-              `channels/${prompt.channel_id}/messages/${prompt.message_id}`,
-              {
-                method: 'PATCH',
-                body: {
-                  flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-                  components: [
-                    {
-                      type: MessageComponentTypes.TEXT_DISPLAY,
-                      content:
-                        'Time has elapsed. You can no longer submit a night action for this night.',
-                    },
-                  ],
+            await patchChannelMessage(prompt.channel_id, prompt.message_id, {
+              flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+              components: [
+                {
+                  type: MessageComponentTypes.TEXT_DISPLAY,
+                  content:
+                    'Time has elapsed. You can no longer submit a night action for this night.',
                 },
-              },
-            );
+              ],
+            });
           } catch (err) {
             console.error(
               'Failed to patch expired night action prompt',

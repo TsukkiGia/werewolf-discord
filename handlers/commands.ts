@@ -15,7 +15,7 @@ import {
   endGame,
   setJoinMessageId,
 } from '../db.js';
-import { DiscordRequest } from '../utils.js';
+import { DiscordRequest, patchChannelMessage, postChannelMessage } from '../utils.js';
 import { dmRolesAndNightActions } from '../game/engine/dmRoles.js';
 import { scheduleNightTimeout } from '../jobs/nightTimeout.js';
 import { buildStatusLines } from '../game/engine/status.js';
@@ -66,28 +66,25 @@ export async function handleWwCreate(req: any, res: any): Promise<any> {
 
   if (channelId) {
     try {
-      const msgRes = await DiscordRequest(`channels/${channelId}/messages`, {
-        method: 'POST',
-        body: {
-          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-          components: [
-            {
-              type: MessageComponentTypes.TEXT_DISPLAY,
-              content: `Game started by <@${userId}>`,
-            },
-            {
-              type: MessageComponentTypes.ACTION_ROW,
-              components: [
-                {
-                  type: MessageComponentTypes.BUTTON,
-                  custom_id: `join_button_${gameId}`,
-                  label: 'Join',
-                  style: ButtonStyleTypes.PRIMARY,
-                },
-              ],
-            },
-          ],
-        },
+      const msgRes = await postChannelMessage(channelId, {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: [
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content: `Game started by <@${userId}>`,
+          },
+          {
+            type: MessageComponentTypes.ACTION_ROW,
+            components: [
+              {
+                type: MessageComponentTypes.BUTTON,
+                custom_id: `join_button_${gameId}`,
+                label: 'Join',
+                style: ButtonStyleTypes.PRIMARY,
+              },
+            ],
+          },
+        ],
       });
 
       const msg = (await msgRes.json()) as { id?: string };
@@ -218,12 +215,9 @@ export async function handleWwStart(req: any, res: any): Promise<any> {
 
   if (game.channel_id && game.join_message_id) {
     try {
-      await DiscordRequest(`channels/${game.channel_id}/messages/${game.join_message_id}`, {
-        method: 'PATCH',
-        body: {
-          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-          components: buildJoinClosedComponents(),
-        },
+      await patchChannelMessage(game.channel_id, game.join_message_id, {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: buildJoinClosedComponents(),
       });
     } catch (err) {
       console.error('Failed to patch join message on game start', err);
@@ -252,11 +246,8 @@ export async function handleWwStart(req: any, res: any): Promise<any> {
 
   if (game.channel_id) {
     try {
-      await DiscordRequest(`channels/${game.channel_id}/messages`, {
-        method: 'POST',
-        body: {
-          content: `The Werewolf game has started!\nHost: <@${game.host_id}>\nPlayers: ${playersText}`,
-        },
+      await postChannelMessage(game.channel_id, {
+        content: `The Werewolf game has started!\nHost: <@${game.host_id}>\nPlayers: ${playersText}`,
       });
     } catch (err) {
       console.error('Failed to send game started message', err);
