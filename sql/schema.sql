@@ -21,3 +21,15 @@ CREATE TABLE IF NOT EXISTS game_players (
   UNIQUE (game_id, user_id)
 );
 
+CREATE TABLE IF NOT EXISTS night_actions (
+  id SERIAL PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  night INTEGER NOT NULL,
+  actor_id TEXT NOT NULL,
+  target_id TEXT,
+  action_kind TEXT NOT NULL,
+  role TEXT NOT NULL,
+  created_at BIGINT NOT NULL,
+  UNIQUE (game_id, night, actor_id)
+);
+
