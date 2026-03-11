@@ -338,7 +338,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'w' }];
 
-    const res = await processHarlotActions(players, visits, [], 'g');
+    const res = await processHarlotActions(players, visits, [], 'g', new Set());
 
     expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'h');
     expect(res.killedHarlotIds).toEqual(['h']);
@@ -360,7 +360,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'v' }];
 
-    const res = await processHarlotActions(players, visits, ['v'], 'g');
+    const res = await processHarlotActions(players, visits, ['v'], 'g', new Set());
 
     expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'h');
     expect(res.killedHarlotIds).toEqual(['h']);
@@ -380,7 +380,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'v' }];
 
-    const res = await processHarlotActions(players, visits, [], 'g');
+    const res = await processHarlotActions(players, visits, [], 'g', new Set());
 
     expect(res.killedHarlotIds).toEqual([]);
     expect(res.harlotDeathInfos).toEqual([]);
@@ -391,6 +391,30 @@ describe('processHarlotActions', () => {
 
     const channels = sentMessages.map((m) => m.channelId).sort();
     expect(channels).toEqual(['dm:h', 'dm:v']);
+  });
+
+  it('treats visiting a wolf who is out for the night as a safe visit', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'h', role: 'harlot', alignment: 'town' }),
+      makePlayer({ user_id: 'w', role: 'werewolf', alignment: 'wolf' }),
+    ];
+
+    const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'w' }];
+
+    // Mark the wolf as "away" (e.g., out hunting) so the harlot finds an empty house.
+    const awayIds = new Set<string>(['w']);
+
+    const res = await processHarlotActions(players, visits, [], 'g', awayIds);
+
+    expect(res.killedHarlotIds).toEqual([]);
+    expect(res.harlotDeathInfos).toEqual([]);
+    expect(markPlayerDeadMock).not.toHaveBeenCalled();
+
+    expect(harlotSafeVisitLineMock).toHaveBeenCalledWith('w');
+    expect(harlotVisitNotificationLineMock).toHaveBeenCalled();
+
+    const channels = sentMessages.map((m) => m.channelId).sort();
+    expect(channels).toEqual(['dm:h', 'dm:w']);
   });
 });
 

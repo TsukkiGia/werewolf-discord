@@ -714,6 +714,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
     visitActions,
     wolfChosenVictims,
     gameId,
+    awayPlayerIds,
   );
   killedIds.push(...killedHarlotIds);
 
