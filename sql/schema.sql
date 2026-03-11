@@ -65,3 +65,14 @@ CREATE TABLE IF NOT EXISTS day_votes (
   created_at BIGINT NOT NULL,
   UNIQUE (game_id, day, voter_id)
 );
+
+CREATE TABLE IF NOT EXISTS hunter_shots (
+  id SERIAL PRIMARY KEY,
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  hunter_id TEXT NOT NULL,
+  continuation TEXT NOT NULL,
+  target_id TEXT,
+  resolved BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at BIGINT NOT NULL,
+  UNIQUE (game_id, hunter_id)
+);

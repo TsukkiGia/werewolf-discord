@@ -15,7 +15,7 @@ import {
 import { postChannelMessage, sendDmMessage } from '../utils.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
 import { getInteractionUserId } from '../interactionHelpers.js';
-import { maybeResolveNight, maybeResolveDay } from '../game/engine/gameOrchestrator.js';
+import { maybeResolveNight, maybeResolveDay, resolveHunterShot } from '../game/engine/gameOrchestrator.js';
 import { buildJoinClosedComponents } from './commands.js';
 import { logEvent } from '../logging.js';
 
@@ -281,4 +281,66 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
   }
 
   void maybeResolveDay(game.id);
+}
+
+export async function handleHunterShot(req: any, res: any, componentId: string): Promise<any> {
+  const gameId = componentId.replace('hunter_shot:', '');
+
+  const game = await getGame(gameId);
+  if (!game || game.status === 'ended') {
+    return res.status(400).json({ error: 'game not found or already ended' });
+  }
+
+  const hunterId = getInteractionUserId(req);
+  if (!hunterId) {
+    return res.status(400).json({ error: 'missing user id' });
+  }
+
+  const players = await getPlayersForGame(gameId);
+  const hunter = players.find((p) => p.user_id === hunterId);
+
+  if (!hunter || hunter.role !== 'hunter' || hunter.is_alive) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'You are not an eliminated Hunter in this game.',
+      },
+    });
+  }
+
+  const targetId: string | null =
+    Array.isArray(req.body.data.values) && req.body.data.values.length > 0
+      ? req.body.data.values[0]
+      : null;
+
+  if (!targetId) {
+    return res.status(400).json({ error: 'no target selected' });
+  }
+
+  const aliveIds = new Set(players.filter((p) => p.is_alive).map((p) => p.user_id));
+  if (!aliveIds.has(targetId)) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'You must shoot a living player who is part of this game.',
+      },
+    });
+  }
+
+  res.send({
+    type: InteractionResponseType.UPDATE_MESSAGE,
+    data: {
+      flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+      components: [
+        {
+          type: MessageComponentTypes.TEXT_DISPLAY,
+          content: `You have chosen to shoot <@${targetId}>. Your shot has been recorded.`,
+        },
+      ],
+    },
+  });
+
+  void resolveHunterShot(gameId, hunterId, targetId);
 }

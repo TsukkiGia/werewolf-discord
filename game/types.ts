@@ -1,4 +1,4 @@
-export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'mason' | 'sorcerer';
+export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'mason' | 'sorcerer' | 'hunter';
 
 export type Alignment = 'wolf' | 'town';
 
@@ -8,6 +8,7 @@ export type RoleBucket =
   | 'village_core'
   | 'village_power_info'
   | 'village_power_protect'
+  | 'village_power_reactive'
   | 'wolf_core'
   | 'wolf_support'
   | 'neutral';

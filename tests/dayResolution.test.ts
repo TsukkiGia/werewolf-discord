@@ -51,22 +51,51 @@ describe('chooseLynchVictim', () => {
 
     expect(chooseLynchVictim(players, votes)).toBeNull();
   });
+
+  it('ignores votes from dead players', () => {
+    const withDead: GamePlayerState[] = [
+      makePlayer({ user_id: 'a' }),
+      makePlayer({ user_id: 'b' }),
+      makePlayer({ user_id: 'c', is_alive: false }),
+    ];
+    const votes: DayVoteRow[] = [
+      makeVote({ voter_id: 'a', target_id: 'b' }),
+      makeVote({ voter_id: 'c', target_id: 'a' }), // dead voter — should be ignored
+    ];
+
+    expect(chooseLynchVictim(withDead, votes)).toBe('b');
+  });
+
+  it('ignores votes targeting dead players', () => {
+    const withDead: GamePlayerState[] = [
+      makePlayer({ user_id: 'a' }),
+      makePlayer({ user_id: 'b', is_alive: false }),
+      makePlayer({ user_id: 'c' }),
+    ];
+    const votes: DayVoteRow[] = [
+      makeVote({ voter_id: 'a', target_id: 'b' }), // dead target — should be ignored
+      makeVote({ voter_id: 'c', target_id: 'a' }),
+    ];
+
+    expect(chooseLynchVictim(withDead, votes)).toBe('a');
+  });
 });
 
 describe('evaluateDayResolution', () => {
-  it('lynches the plurality target even if not everyone has voted', () => {
+  it('returns pending when not all alive players have voted', () => {
     const votes: DayVoteRow[] = [
       makeVote({ voter_id: 'a', target_id: 'b' }),
+      // b and c have not voted
     ];
 
-    const res = evaluateDayResolution(players, votes);
-    expect(res.state).toBe('lynch');
-    if (res.state === 'lynch') {
-      expect(res.lynchId).toBe('b');
-    }
+    expect(evaluateDayResolution(players, votes).state).toBe('pending');
   });
 
-  it('returns lynch when majority reached and everyone has voted', () => {
+  it('returns pending when no one has voted', () => {
+    expect(evaluateDayResolution(players, []).state).toBe('pending');
+  });
+
+  it('returns lynch when everyone has voted and there is a clear plurality', () => {
     const votes: DayVoteRow[] = [
       makeVote({ voter_id: 'a', target_id: 'b' }),
       makeVote({ voter_id: 'b', target_id: 'b' }),
@@ -75,19 +104,44 @@ describe('evaluateDayResolution', () => {
 
     const res = evaluateDayResolution(players, votes);
     expect(res.state).toBe('lynch');
-    if (res.state === 'lynch') {
-      expect(res.lynchId).toBe('b');
-    }
+    if (res.state === 'lynch') expect(res.lynchId).toBe('b');
   });
 
-  it('returns no_lynch when everyone has voted but no majority', () => {
+  it('returns no_lynch when everyone has voted but top candidates are tied', () => {
     const votes: DayVoteRow[] = [
       makeVote({ voter_id: 'a', target_id: 'b' }),
       makeVote({ voter_id: 'b', target_id: 'c' }),
       makeVote({ voter_id: 'c', target_id: 'a' }),
     ];
 
-    const res = evaluateDayResolution(players, votes);
-    expect(res.state).toBe('no_lynch');
+    expect(evaluateDayResolution(players, votes).state).toBe('no_lynch');
+  });
+
+  describe('force=true (timeout path)', () => {
+    it('resolves with plurality from partial votes', () => {
+      const votes: DayVoteRow[] = [
+        makeVote({ voter_id: 'a', target_id: 'b' }),
+        makeVote({ voter_id: 'b', target_id: 'b' }),
+        // c has not voted
+      ];
+
+      const res = evaluateDayResolution(players, votes, { force: true });
+      expect(res.state).toBe('lynch');
+      if (res.state === 'lynch') expect(res.lynchId).toBe('b');
+    });
+
+    it('returns no_lynch when partial votes are tied', () => {
+      const votes: DayVoteRow[] = [
+        makeVote({ voter_id: 'a', target_id: 'b' }),
+        makeVote({ voter_id: 'b', target_id: 'c' }),
+        // c has not voted
+      ];
+
+      expect(evaluateDayResolution(players, votes, { force: true }).state).toBe('no_lynch');
+    });
+
+    it('returns no_lynch when no one has voted', () => {
+      expect(evaluateDayResolution(players, [], { force: true }).state).toBe('no_lynch');
+    });
   });
 });

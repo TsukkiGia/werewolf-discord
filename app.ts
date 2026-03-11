@@ -5,7 +5,8 @@ import { initDb } from './db.js';
 import { boss, registerWorkers } from './jobs/dayVoting.js';
 import { registerNightWorker } from './jobs/nightTimeout.js';
 import { registerDayTimeoutWorker } from './jobs/dayTimeout.js';
-import { maybeResolveNight, maybeResolveDay } from './game/engine/gameOrchestrator.js';
+import { registerHunterShotTimeoutWorker } from './jobs/hunterShotTimeout.js';
+import { maybeResolveNight, maybeResolveDay, resolveHunterShot } from './game/engine/gameOrchestrator.js';
 import {
   handleWwCreate,
   handleWwEnd,
@@ -13,7 +14,7 @@ import {
   handleWwStatus,
   handleWwStart,
 } from './handlers/commands.js';
-import { handleJoinButton, handleNightAction, handleDayVote } from './handlers/components.js';
+import { handleJoinButton, handleNightAction, handleDayVote, handleHunterShot } from './handlers/components.js';
 
 // Ensure database schema exists before handling traffic
 await initDb();
@@ -21,6 +22,7 @@ await boss.start();
 await registerWorkers();
 await registerNightWorker(maybeResolveNight);
 await registerDayTimeoutWorker((gameId) => maybeResolveDay(gameId, { force: true }));
+await registerHunterShotTimeoutWorker((gameId, hunterId) => resolveHunterShot(gameId, hunterId, null));
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;
@@ -60,6 +62,7 @@ app.post(
       if (componentId.startsWith('join_button_')) return handleJoinButton(req, res, componentId);
       if (componentId.startsWith('night_action:')) return handleNightAction(req, res, componentId);
       if (componentId.startsWith('day_vote:')) return handleDayVote(req, res, componentId);
+      if (componentId.startsWith('hunter_shot:')) return handleHunterShot(req, res, componentId);
 
       console.error(`unknown component: ${componentId}`);
       return res.status(400).json({ error: 'unknown component' });

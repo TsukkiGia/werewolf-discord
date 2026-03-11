@@ -3,3 +3,4 @@ export * from './db/games.js';
 export * from './db/players.js';
 export * from './db/nightActions.js';
 export * from './db/votes.js';
+export * from './db/hunterShots.js';

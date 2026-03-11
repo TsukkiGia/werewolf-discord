@@ -45,7 +45,7 @@ async function fetchDisplayName(userId: string, guildId: string | null): Promise
   return userId;
 }
 
-async function getDisplayName(userId: string, guildId: string | null): Promise<string> {
+export async function getDisplayName(userId: string, guildId: string | null): Promise<string> {
   const cacheKey = `${userId}:${guildId ?? ''}`;
   const existing = displayNameCache.get(cacheKey);
   if (existing) return existing;

@@ -1,5 +1,6 @@
 import type { AssignedRole } from '../types.js';
 import { chooseSetup } from '../balancing/chooseSetup.js';
+import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
 
 function shuffle<T>(items: T[]): T[] {
   const arr = [...items];
@@ -26,7 +27,7 @@ export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
     if (!role) {
       throw new Error('chooseSetup did not return enough roles for all players');
     }
-    const alignment = role === 'werewolf' ? 'wolf' : 'town';
+    const alignment = ROLE_REGISTRY[role].alignment;
 
     assignments.push({ userId, role, alignment });
   }

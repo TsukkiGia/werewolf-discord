@@ -8,6 +8,8 @@ import {
   advancePhase,
   endGame,
   getVotesForDay,
+  getPendingHunterShot,
+  resolveHunterShotRecord,
 } from '../../db.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { postChannelMessage } from '../../utils.js';
@@ -20,6 +22,7 @@ import {
   buildNoLynchLine,
 } from './status.js';
 import { dmNightActionsForAlivePlayers } from './dmRoles.js';
+import { triggerHunterShot } from './hunterShot.js';
 import { scheduleDayVoting } from '../../jobs/dayVoting.js';
 import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
 import { scheduleDayTimeout } from '../../jobs/dayTimeout.js';
@@ -92,6 +95,35 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     );
 
     const updatedPlayers = await getPlayersForGame(gameId);
+
+    // Check if the killed player was the Hunter — if so, trigger their reactive shot
+    const killedHunter = killedIds.length > 0
+      ? updatedPlayers.find((p) => killedIds.includes(p.user_id) && p.role === 'hunter')
+      : null;
+
+    if (killedHunter) {
+      const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
+      if (game.channel_id) {
+        const victims = updatedPlayers.filter((p) => killedIds.includes(p.user_id));
+        const lines: string[] = ['Dawn breaks.'];
+        lines.push(
+          ...victims.map((v) => {
+            const wasWolf = v.alignment === 'wolf';
+            const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
+            return `<@${v.user_id}> was eliminated during the night. They were ${roleSummary}.`;
+          }),
+        );
+        lines.push("The Hunter's eyes flash with resolve...");
+        try {
+          await postChannelMessage(game.channel_id, { content: lines.join('\n') });
+        } catch (err) {
+          console.error('Failed to send dawn message', err);
+        }
+      }
+      await triggerHunterShot({ game, hunterId: killedHunter.user_id, continuation: `day:${upcomingDay}`, alivePlayers });
+      return;
+    }
+
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
@@ -189,8 +221,28 @@ export async function maybeResolveDay(
     }
 
     await markPlayerDead(gameId, lynchId);
-
     const updatedPlayers = await getPlayersForGame(gameId);
+
+    // Check if the lynched player was the Hunter — if so, trigger their reactive shot
+    if (lynched.role === 'hunter') {
+      const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
+      if (game.channel_id) {
+        const wasWolf = lynched.alignment === 'wolf';
+        const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
+        const lines = [
+          `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
+          "The Hunter's eyes flash with resolve...",
+        ];
+        try {
+          await postChannelMessage(game.channel_id, { content: lines.join('\n') });
+        } catch (err) {
+          console.error('Failed to send lynch message', err);
+        }
+      }
+      await triggerHunterShot({ game, hunterId: lynchId, continuation: 'night', alivePlayers });
+      return;
+    }
+
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
@@ -222,5 +274,63 @@ export async function maybeResolveDay(
     await dmNightAndSchedule(gameId);
   } catch (err) {
     console.error('Error resolving day phase', err);
+  }
+}
+
+export async function resolveHunterShot(gameId: string, hunterId: string, targetId: string | null): Promise<void> {
+  try {
+    // Read the pending shot first to get the continuation
+    const shot = await getPendingHunterShot(gameId, hunterId);
+    if (!shot) return; // already resolved or doesn't exist
+
+    // Atomically mark as resolved (prevent concurrent double-resolution from timeout + user submit)
+    const claimed = await resolveHunterShotRecord(gameId, hunterId, targetId);
+    if (!claimed) return;
+
+    if (targetId) {
+      await markPlayerDead(gameId, targetId);
+    }
+
+    const game = await getGame(gameId);
+    const updatedPlayers = await getPlayersForGame(gameId);
+    const win = evaluateWinCondition(updatedPlayers);
+
+    if (game?.channel_id) {
+      const lines: string[] = [];
+      if (targetId) {
+        const target = updatedPlayers.find((p) => p.user_id === targetId);
+        const wasWolf = target?.alignment === 'wolf';
+        const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
+        lines.push(`<@${hunterId}> was eliminated, but took <@${targetId}> down with them. They were ${roleSummary}.`);
+      } else {
+        lines.push(`<@${hunterId}> was eliminated and chose not to shoot.`);
+      }
+      if (win) {
+        lines.push(...buildWinLines(win));
+        lines.push(...buildFinalRolesLines(updatedPlayers));
+      }
+      try {
+        await postChannelMessage(game.channel_id, { content: lines.join('\n') });
+      } catch (err) {
+        console.error('Failed to send hunter shot message', err);
+      }
+    }
+
+    if (win) {
+      await endGame(gameId);
+      return;
+    }
+
+    // Continue game based on continuation field
+    if (shot.continuation.startsWith('day:')) {
+      const upcomingDay = parseInt(shot.continuation.split(':')[1]!, 10);
+      scheduleDayVoting(gameId, upcomingDay);
+      scheduleDayTimeout(gameId, upcomingDay);
+    } else {
+      // continuation === 'night'
+      await dmNightAndSchedule(gameId);
+    }
+  } catch (err) {
+    console.error('Error resolving hunter shot', err);
   }
 }

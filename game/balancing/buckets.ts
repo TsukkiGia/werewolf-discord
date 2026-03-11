@@ -46,6 +46,11 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
     slotCountForPlayers: (playerCount) => (playerCount >= 5 ? 1 : 0),
   },
   {
+    id: 'village_power_reactive',
+    roles: ['hunter'],
+    slotCountForPlayers: (playerCount) => (playerCount >= 6 ? 1 : 0),
+  },
+  {
     id: 'village_core',
     roles: ['villager', 'mason'],
     slotCountForPlayers: (playerCount, currentCounts) => {
@@ -53,6 +58,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
         currentCounts.wolf_core +
         currentCounts.village_power_info +
         currentCounts.village_power_protect +
+        currentCounts.village_power_reactive +
         currentCounts.wolf_support +
         currentCounts.neutral;
       return Math.max(0, playerCount - used);

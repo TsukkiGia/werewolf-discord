@@ -25,4 +25,40 @@ describe('assignRolesForPlayerIds', () => {
   it('returns empty array when there are no players', () => {
     expect(assignRolesForPlayerIds([])).toEqual([]);
   });
+
+  it('sorcerer gets wolf alignment (regression: was hardcoded to town)', () => {
+    // Sorcerer appears at 7+ players; run many times to ensure it appears.
+    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
+    let found = false;
+
+    for (let i = 0; i < 50; i++) {
+      const assignments = assignRolesForPlayerIds(ids);
+      const sorcerer = assignments.find((a) => a.role === 'sorcerer');
+      if (sorcerer) {
+        expect(sorcerer.alignment).toBe('wolf');
+        found = true;
+        break;
+      }
+    }
+
+    expect(found).toBe(true);
+  });
+
+  it('hunter gets town alignment', () => {
+    // Hunter appears at 6+ players.
+    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
+    let found = false;
+
+    for (let i = 0; i < 50; i++) {
+      const assignments = assignRolesForPlayerIds(ids);
+      const hunter = assignments.find((a) => a.role === 'hunter');
+      if (hunter) {
+        expect(hunter.alignment).toBe('town');
+        found = true;
+        break;
+      }
+    }
+
+    expect(found).toBe(true);
+  });
 });

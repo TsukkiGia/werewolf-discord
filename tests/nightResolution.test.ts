@@ -40,6 +40,18 @@ describe('chooseKillVictim', () => {
     const victim = chooseKillVictim(['a', 'b', 'a', 'c', 'a']);
     expect(victim).toBe('a');
   });
+
+  it('returns null when two wolves split their vote (tie)', () => {
+    expect(chooseKillVictim(['a', 'b'])).toBeNull();
+  });
+
+  it('returns null on a three-way tie', () => {
+    expect(chooseKillVictim(['a', 'b', 'c'])).toBeNull();
+  });
+
+  it('returns the winner when one target breaks the tie', () => {
+    expect(chooseKillVictim(['a', 'b', 'a'])).toBe('a');
+  });
 });
 
 describe('evaluateNightResolution', () => {

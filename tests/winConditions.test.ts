@@ -29,7 +29,7 @@ describe('evaluateWinCondition', () => {
     }
   });
 
-  it('returns wolves win when wolves alive and <=1 town alive', () => {
+  it('returns wolves win when wolves equal town', () => {
     const players: GamePlayerState[] = [
       makePlayer({ user_id: 't1', alignment: 'town', is_alive: true }),
       makePlayer({ user_id: 'w1', alignment: 'wolf', is_alive: true, role: 'werewolf' }),
@@ -42,6 +42,19 @@ describe('evaluateWinCondition', () => {
       expect(win.winner).toBe('wolves');
       expect(win.wolves.map((p) => p.user_id).sort()).toEqual(['w1', 'w2']);
     }
+  });
+
+  it('returns wolves win when wolves outnumber town (regression: was == instead of >=)', () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 't1', alignment: 'town', is_alive: true }),
+      makePlayer({ user_id: 'w1', alignment: 'wolf', is_alive: true, role: 'werewolf' }),
+      makePlayer({ user_id: 'w2', alignment: 'wolf', is_alive: true, role: 'werewolf' }),
+      makePlayer({ user_id: 'w3', alignment: 'wolf', is_alive: true, role: 'werewolf' }),
+    ];
+
+    const win = evaluateWinCondition(players);
+    expect(win).not.toBeNull();
+    if (win) expect(win.winner).toBe('wolves');
   });
 
   it('returns null when both sides still have multiple players', () => {
