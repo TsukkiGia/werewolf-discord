@@ -58,7 +58,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   },
   {
     id: 'village_power_visit',
-    roles: ['harlot'],
+    roles: ['chemist'],
     slotCountForPlayers: (playerCount) => (playerCount >= 3 ? 1 : 0),
   },
   {

@@ -73,7 +73,7 @@ describe('evaluateNightResolution', () => {
       // seer + doctor missing
     ];
 
-    const res = evaluateNightResolution(players, actions);
+    const res = evaluateNightResolution(players, actions, 1);
     expect(res.state).toBe('pending');
   });
 
@@ -99,7 +99,7 @@ describe('evaluateNightResolution', () => {
       }),
     ];
 
-    const res = evaluateNightResolution(players, actions);
+    const res = evaluateNightResolution(players, actions, 1);
     expect(res.state).toBe('ready');
     if (res.state === 'ready') {
       expect(res.killTargets).toEqual(['villager']);
@@ -108,4 +108,3 @@ describe('evaluateNightResolution', () => {
   });
 }
 )
-

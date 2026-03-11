@@ -73,12 +73,17 @@ export type NightResolutionResult =
 export function evaluateNightResolution(
   players: GamePlayerState[],
   actions: NightActionRow[],
+  nightNumber: number,
 ): NightResolutionResult {
   const requiredActors = players.filter((p) => {
     if (!p.is_alive) return false;
     if (!isRoleName(p.role)) return false;
     const def = ROLE_REGISTRY[p.role];
-    return def.nightAction.kind !== 'none';
+    if (def.nightAction.kind === 'none') return false;
+    if (def.isNightActionRequired && !def.isNightActionRequired({ nightNumber })) {
+      return false;
+    }
+    return true;
   });
 
   const requiredActorIds = new Set(requiredActors.map((p) => p.user_id));
@@ -109,4 +114,3 @@ export function evaluateNightResolution(
     visitActions,
   };
 }
-

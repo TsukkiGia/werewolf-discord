@@ -213,3 +213,91 @@ export async function processHarlotActions(
 
   return { killedHarlotIds, harlotDeathInfos };
 }
+
+export interface ChemistDuelInfo {
+  chemistId: string;
+  targetId: string;
+  victimId: string;
+}
+
+export interface ChemistActionResult {
+  killedIds: string[];
+  duels: ChemistDuelInfo[];
+}
+
+/**
+ * Process Chemist potion-share actions.
+ *
+ * For each alive Chemist with a `potion` action:
+ * - They choose a target player.
+ * - One of the two (Chemist or target) dies with 50% probability.
+ *
+ * Doctor protection does not apply to these deaths.
+ */
+export async function processChemistActions(
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+  nightNumber: number,
+  gameId: string,
+  killedIds: string[],
+): Promise<ChemistActionResult> {
+  const killedByChemist: string[] = [];
+  const duels: ChemistDuelInfo[] = [];
+
+  const chemists = players.filter((p) => p.is_alive && p.role === 'chemist');
+  if (chemists.length === 0) {
+    return { killedIds: killedByChemist, duels };
+  }
+
+  for (const chemist of chemists) {
+    // If the Chemist was already killed earlier this night (e.g. by wolves),
+    // skip their duel.
+    if (killedIds.includes(chemist.user_id)) continue;
+
+    const action = actions.find(
+      (a) =>
+        a.actor_id === chemist.user_id &&
+        a.action_kind === 'potion' &&
+        a.target_id,
+    );
+    if (!action || !action.target_id) continue;
+
+    const target = players.find((p) => p.user_id === action.target_id);
+    if (!target || !target.is_alive) continue;
+
+    const chemistId = chemist.user_id;
+    const targetId = target.user_id;
+
+    const chemistDies = Math.random() < 0.5;
+    const victimId = chemistDies ? chemistId : targetId;
+
+    await markPlayerDead(gameId, victimId);
+    killedByChemist.push(victimId);
+    duels.push({ chemistId, targetId, victimId });
+
+    // DM both players about the outcome.
+    const chemistContent = chemistDies
+      ? `You visited <@${targetId}> to share your potions. They grabbed the safe one. You drank the poison and died.`
+      : `You visited <@${targetId}> to share your potions. They chose poorly and drank the poison. You survived.`;
+
+    const targetContent = chemistDies
+      ? `The Chemist visited you for a late-night drink. You picked the safe potion — they took the poison and died.`
+      : `The Chemist visited you for a late-night drink. You chose the wrong potion and died from the poison.`;
+
+    try {
+      const chemistDm = await openDmChannel(chemistId);
+      await postChannelMessage(chemistDm, { content: chemistContent });
+    } catch (err) {
+      console.error('Failed to DM chemist potion result', err);
+    }
+
+    try {
+      const targetDm = await openDmChannel(targetId);
+      await postChannelMessage(targetDm, { content: targetContent });
+    } catch (err) {
+      console.error('Failed to DM chemist target potion result', err);
+    }
+  }
+
+  return { killedIds: killedByChemist, duels };
+}

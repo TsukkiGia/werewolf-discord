@@ -9,7 +9,8 @@ export type RoleName =
   | 'wolf_cub'
   | 'alpha_wolf'
   | 'harlot'
-  | 'clumsy_guy';
+  | 'clumsy_guy'
+  | 'chemist';
 
 /** The wolf_core roles that form the pack (excludes wolf_support like sorcerer). */
 export const WOLF_PACK_ROLES: ReadonlySet<RoleName> = new Set(['werewolf', 'wolf_cub', 'alpha_wolf']);
@@ -40,7 +41,7 @@ export interface RoleIntroContext {
   allAssignments: AssignedRole[];
 }
 
-export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit';
+export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion';
 
 export interface NightActionDefinition {
   kind: NightActionKind;
@@ -66,6 +67,12 @@ export interface RoleDefinition {
    * (e.g. villager, mason, werewolf).
    */
   unique?: boolean;
+  /**
+   * Optional hook to indicate whether this role's night action is required
+   * for a given night number. If omitted, any non-`none` nightAction is
+   * required every night.
+   */
+  isNightActionRequired?: (ctx: { nightNumber: number }) => boolean;
   /**
    * Build the DM text shown to a player at game start when their
    * role is revealed. Each role is responsible for its own intro.

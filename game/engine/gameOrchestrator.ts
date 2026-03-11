@@ -10,7 +10,12 @@ import {
   resolveHunterShotRecord,
 } from '../../db.js';
 import type { GamePlayerState } from '../../db/players.js';
-import { processSeerActions, processDoctorActions, processHarlotActions } from './nightActionProcessors.js';
+import {
+  processSeerActions,
+  processDoctorActions,
+  processHarlotActions,
+  processChemistActions,
+} from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
 import { evaluateDayResolution } from './dayResolution.js';
@@ -39,13 +44,17 @@ import {
   doctorProtectingWolfDeathLine,
   harlotVisitWolfDeathLine,
   harlotVisitWolfVictimDeathLine,
+  chemistSelfDeathLine,
+  chemistTargetDeathLine,
 } from '../strings/narration.js';
 
 type NightDeathCause =
   | 'wolf_kill'
   | 'doctor_protecting_wolf'
   | 'harlot_visiting_wolf'
-  | 'harlot_visiting_wolf_victim';
+  | 'harlot_visiting_wolf_victim'
+  | 'chemist_self'
+  | 'chemist_target';
 
 interface NightDeathInfo {
   playerId: string;
@@ -89,7 +98,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     const players = await getPlayersForGame(gameId);
     const actions = await getNightActionsForNight(gameId, nightNumber);
 
-    const nightResolution = evaluateNightResolution(players, actions);
+    const nightResolution = evaluateNightResolution(players, actions, nightNumber);
     if (nightResolution.state === 'pending') {
       return;
     }
@@ -187,10 +196,32 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       });
     }
 
-    // --- 6. Refresh player state post-kills ---
+    // --- 6. Chemist actions ---
+    const chemistResult = await processChemistActions(
+      players,
+      actions,
+      nightNumber,
+      gameId,
+      killedIds,
+    );
+    for (const id of chemistResult.killedIds) {
+      if (!killedIds.includes(id)) {
+        killedIds.push(id);
+      }
+    }
+
+    for (const duel of chemistResult.duels) {
+      nightDeaths.push({
+        playerId: duel.victimId,
+        cause: duel.victimId === duel.chemistId ? 'chemist_self' : 'chemist_target',
+        relatedPlayerId: duel.victimId === duel.chemistId ? duel.targetId : duel.chemistId,
+      });
+    }
+
+    // --- 7. Refresh player state post-kills ---
     const updatedPlayers = await getPlayersForGame(gameId);
 
-    // --- 7. Hunter reactive shot (if the hunter was killed tonight) ---
+    // --- 8. Hunter reactive shot (if the hunter was killed tonight) ---
     const killedHunter = killedIds.length > 0
       ? updatedPlayers.find((p) => killedIds.includes(p.user_id) && p.role === 'hunter')
       : null;
@@ -219,7 +250,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
-    // --- 8. Dawn announcement ---
+    // --- 9. Dawn announcement ---
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
@@ -255,7 +286,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
-    // --- 9. Schedule day voting and timeout ---
+    // --- 10. Schedule day voting and timeout ---
     scheduleDayVoting(gameId, upcomingDay);
     scheduleDayTimeout(gameId, upcomingDay);
   } catch (err) {
@@ -285,6 +316,14 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
       }
       case 'harlot_visiting_wolf_victim': {
         lines.push(harlotVisitWolfVictimDeathLine(death.playerId));
+        break;
+      }
+      case 'chemist_self': {
+        lines.push(chemistSelfDeathLine(death.playerId));
+        break;
+      }
+      case 'chemist_target': {
+        lines.push(chemistTargetDeathLine(death.playerId));
         break;
       }
     }

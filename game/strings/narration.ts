@@ -197,6 +197,24 @@ export function harlotVisitWolfVictimDeathLine(harlotId: string): string {
   return pickRandom(variants);
 }
 
+export function chemistSelfDeathLine(chemistId: string): string {
+  const variants = [
+    `<@${chemistId}> was found in a haze of shattered vials and toxic fumes. Their last batch of potions clearly went wrong.`,
+    `By morning, <@${chemistId}> lay lifeless amid broken glass and strange-colored stains — a victim of their own concoctions.`,
+    `The village finds <@${chemistId}> collapsed in their lab, surrounded by spilled brews. Whatever they drank, it was deadly.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function chemistTargetDeathLine(victimId: string): string {
+  const variants = [
+    `<@${victimId}> is discovered dead, reeking of strange potions. Last night’s “tasting session” was clearly fatal.`,
+    `At dawn, <@${victimId}> is found with blackened lips and shattered vials nearby — poisoned by a bad brew.`,
+    `<@${victimId}> never woke up after sharing mysterious potions in the night. The smell of alchemy still hangs in the air.`,
+  ];
+  return pickRandom(variants);
+}
+
 export function finalRolesLines(players: GamePlayerState[]): string[] {
   const roleLines =
     players.length > 0

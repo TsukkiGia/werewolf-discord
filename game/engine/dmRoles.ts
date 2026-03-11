@@ -176,12 +176,16 @@ export async function dmNightActionsForAlivePlayers(params: {
   if (alivePlayers.length === 0) return;
 
   const targetIds = alivePlayers.map((p) => p.user_id);
+  const nightNumber = game.current_night || 1;
 
   const assignments: AssignedRole[] = alivePlayers
     .map((p) => {
       if (!isRoleName(p.role)) return null;
       const def = ROLE_REGISTRY[p.role];
       if (def.nightAction.kind === 'none') {
+        return null;
+      }
+      if (def.isNightActionRequired && !def.isNightActionRequired({ nightNumber })) {
         return null;
       }
       return {
@@ -194,7 +198,6 @@ export async function dmNightActionsForAlivePlayers(params: {
 
   if (assignments.length === 0) return;
 
-  const nightNumber = game.current_night || 1;
   await dmNightPromptsCore({
     game,
     playerIds: targetIds,
