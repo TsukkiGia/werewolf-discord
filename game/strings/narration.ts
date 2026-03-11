@@ -13,6 +13,19 @@ function teamSummary(alignment: Alignment | null | undefined): string {
   return alignment === 'wolf' ? 'on the **wolf team**' : 'not on the **wolf team**';
 }
 
+// Toggle: when true, deaths reveal the exact role instead of just alignment.
+const REVEAL_ROLE_ON_DEATH = false;
+
+export function deathSummary(
+  alignment: Alignment | null | undefined,
+  role?: string | null,
+): string {
+  if (REVEAL_ROLE_ON_DEATH && role) {
+    return `**${role}**`;
+  }
+  return teamSummary(alignment);
+}
+
 export function dayStartLine(dayNumber: number): string {
   const variants = [
     `Day ${dayNumber} begins. You have 30 seconds to talk before voting starts.`,
@@ -103,22 +116,27 @@ export function revealWolvesLine(wolfMentions: string): string {
   return pickRandom(variants);
 }
 
-export function nightVictimLine(userId: string, alignment: Alignment | null): string {
-  const summary = teamSummary(alignment);
+export function nightVictimLine(victim: GamePlayerState): string {
+  const summary = deathSummary(victim.alignment as Alignment | null, victim.role);
   const variants = [
-    `<@${userId}> was killed during the night. They were ${summary}.`,
-    `By morning, <@${userId}> is found dead. They were ${summary}.`,
-    `<@${userId}> did not survive the night. They were ${summary}.`,
+    `<@${victim.user_id}> was killed during the night. They were ${summary}.`,
+    `By morning, <@${victim.user_id}> is found dead. They were ${summary}.`,
+    `<@${victim.user_id}> did not survive the night. They were ${summary}.`,
   ];
   return pickRandom(variants);
 }
 
-export function lynchResultLine(userId: string, alignment: Alignment | null): string {
-  return `Day vote results: <@${userId}> was lynched. They were ${teamSummary(alignment)}.`;
+export function lynchResultLine(victim: GamePlayerState): string {
+  const summary = deathSummary(victim.alignment as Alignment | null, victim.role);
+  return `Day vote results: <@${victim.user_id}> was lynched. They were ${summary}.`;
 }
 
-export function hunterShotLine(hunterId: string, targetId: string, alignment: Alignment | null | undefined): string {
-  return `<@${hunterId}> was eliminated, but took <@${targetId}> down with them. They were ${teamSummary(alignment)}.`;
+export function hunterShotLine(
+  hunter: GamePlayerState,
+  target: GamePlayerState,
+): string {
+  const summary = deathSummary(target.alignment as Alignment | null, target.role);
+  return `<@${hunter.user_id}> was eliminated, but took <@${target.user_id}> down with them. They were ${summary}.`;
 }
 
 export function hunterPassLine(hunterId: string): string {
