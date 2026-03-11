@@ -151,7 +151,7 @@ export async function handleWwHelp(_req: any, res: any): Promise<any> {
     '3. Everyone receives a DM with their role. Roles with night actions (werewolf, seer, doctor) also get a DM menu to choose a target.',
     '4. When all required night actions are submitted, night resolves automatically.',
     '5. At dawn, the bot announces any deaths, then gives the channel 30 seconds to discuss.',
-    '6. After 30 seconds, alive players receive a DM to vote on a lynch. Votes are announced in the channel and resolve automatically when there is a majority.',
+    '6. After 30 seconds, alive players receive a DM to vote on a lynch. Votes are announced in the channel and resolve automatically when there is a plurality (ties result in no lynch).',
     '',
     'The game ends automatically when either all wolves are dead (town wins) or only wolves are left alive (wolves win).',
   ];

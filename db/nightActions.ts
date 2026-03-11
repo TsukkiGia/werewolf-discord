@@ -176,10 +176,12 @@ export async function processDoctorActions(
   actions: NightActionRow[],
   killTargets: string[],
   killedIds: string[],
-): Promise<void> {
+): Promise<boolean> {
   const protectActions = actions.filter(
     (a) => a.action_kind === 'protect' && a.target_id,
   );
+
+  let anySaved = false;
 
   await Promise.all(
     protectActions.map(async (action) => {
@@ -190,6 +192,10 @@ export async function processDoctorActions(
       const wasTargetedByWolves = killTargets.includes(targetId);
       const wasKilled = killedIds.includes(targetId);
       const saved = wasTargetedByWolves && !wasKilled;
+
+      if (saved) {
+        anySaved = true;
+      }
 
       const base =
         saved
@@ -206,4 +212,6 @@ export async function processDoctorActions(
       }
     }),
   );
+
+  return anySaved;
 }

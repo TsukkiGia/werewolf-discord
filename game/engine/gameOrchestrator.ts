@@ -65,7 +65,12 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       await markPlayerDead(gameId, victimId);
     }
 
-    await processDoctorActions(players, actions, killTargets, killedIds);
+    const doctorSavedSomeone = await processDoctorActions(
+      players,
+      actions,
+      killTargets,
+      killedIds,
+    );
 
     const updatedPlayers = await getPlayersForGame(gameId);
     const win = evaluateWinCondition(updatedPlayers);
@@ -77,6 +82,11 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
       if (victims.length === 0) {
         lines.push('Dawn breaks. No one was eliminated during the night.');
+        if (doctorSavedSomeone) {
+          lines.push(
+            'Rumor spreads through the village: the wolves tried to attack someone, but they were protected by the doctor.',
+          );
+        }
       } else {
         lines.push('Dawn breaks.');
         lines.push(

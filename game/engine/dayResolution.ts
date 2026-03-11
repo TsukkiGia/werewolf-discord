@@ -6,9 +6,8 @@ import type { DayVoteRow } from '../../db/votes.js';
  *
  * Rules:
  * - Only votes from alive players, targeting alive players, are counted.
- * - A player is lynched only if they reach strict majority:
- *   votes >= floor(aliveCount / 2) + 1.
- * - If no one has majority yet, returns null.
+ * - The player with the highest vote count (plurality) is lynched.
+ * - If there is a tie for highest votes, returns null (no lynch).
  */
 export function chooseLynchVictim(
   players: GamePlayerState[],
@@ -21,8 +20,6 @@ export function chooseLynchVictim(
   const aliveCount = aliveIds.size;
   if (aliveCount === 0) return null;
 
-  const majority = Math.floor(aliveCount / 2) + 1;
-
   const counts = new Map<string, number>();
   for (const vote of votes) {
     const voterId = vote.voter_id;
@@ -31,13 +28,22 @@ export function chooseLynchVictim(
     counts.set(targetId, (counts.get(targetId) ?? 0) + 1);
   }
 
+  let bestId: string | null = null;
+  let bestCount = 0;
+  let isTie = false;
+
   for (const [targetId, count] of counts) {
-    if (count >= majority) {
-      return targetId;
+    if (count > bestCount) {
+      bestCount = count;
+      bestId = targetId;
+      isTie = false;
+    } else if (count === bestCount && bestId !== null) {
+      isTie = true;
     }
   }
 
-  return null;
+  if (!bestId || isTie) return null;
+  return bestId;
 }
 
 export type DayResolutionState = 'pending' | 'no_lynch' | 'lynch';
@@ -63,8 +69,8 @@ export type DayResolutionResult =
 /**
  * Evaluate the current day votes and decide whether:
  * - the day is still pending (not everyone has voted),
- * - there is a majority lynch target,
- * - or the day ends in a no-lynch.
+ * - there is a lynch target (plurality winner),
+ * - or the day ends in a no-lynch (tie).
  *
  * This is pure game logic; side-effects (messages, DB writes) live in app.ts.
  */
@@ -94,4 +100,3 @@ export function evaluateDayResolution(
 
   return { state: 'lynch', lynchId };
 }
-

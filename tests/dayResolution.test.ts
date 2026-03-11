@@ -32,7 +32,7 @@ const players: GamePlayerState[] = [
 ];
 
 describe('chooseLynchVictim', () => {
-  it('returns target with strict majority', () => {
+  it('returns target with highest vote count (plurality)', () => {
     const votes: DayVoteRow[] = [
       makeVote({ voter_id: 'a', target_id: 'b' }),
       makeVote({ voter_id: 'b', target_id: 'b' }),
@@ -42,7 +42,7 @@ describe('chooseLynchVictim', () => {
     expect(chooseLynchVictim(players, votes)).toBe('b');
   });
 
-  it('returns null when no one has majority', () => {
+  it('returns null when top candidates are tied', () => {
     const votes: DayVoteRow[] = [
       makeVote({ voter_id: 'a', target_id: 'b' }),
       makeVote({ voter_id: 'b', target_id: 'c' }),
@@ -88,4 +88,3 @@ describe('evaluateDayResolution', () => {
     expect(res.state).toBe('no_lynch');
   });
 });
-
