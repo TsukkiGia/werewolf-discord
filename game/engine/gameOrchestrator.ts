@@ -3,14 +3,13 @@ import {
   getPlayersForGame,
   getNightActionsForNight,
   markPlayerDead,
-  processSeerActions,
-  processDoctorActions,
   advancePhase,
   endGame,
   getVotesForDay,
   getPendingHunterShot,
   resolveHunterShotRecord,
 } from '../../db.js';
+import { processSeerActions, processDoctorActions } from './nightActionProcessors.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { postChannelMessage } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
