@@ -221,6 +221,7 @@ export async function dmDayVotePrompts(params: {
 
   for (const player of alivePlayers) {
     try {
+      console.log('Sending day-vote DM to', player.user_id);
       const dmChannelId = await openDmChannel(player.user_id);
 
       const options = [];
