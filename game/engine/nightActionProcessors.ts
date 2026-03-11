@@ -90,7 +90,12 @@ export async function processDoctorActions(
       const doctorId = action.actor_id;
 
       // Doctor tried to protect a wolf — risky move.
+      // If the wolf also targeted the doctor this night, the wolf kill already
+      // resolved first (killedIds is populated before this runs). Skip the
+      // retaliation roll — the doctor is already dead.
       if (WOLF_PACK_ROLES.has(target.role as RoleName)) {
+        if (killedIds.includes(doctorId)) return;
+
         const doctorDies = Math.random() < 0.75;
         if (doctorDies) {
           await markPlayerDead(action.game_id, doctorId);
