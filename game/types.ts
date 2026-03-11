@@ -2,6 +2,16 @@ export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor';
 
 export type Alignment = 'wolf' | 'town';
 
+// High-level balancing buckets. These describe how a role is used when
+// constructing setups, independent of its exact name.
+export type RoleBucket =
+  | 'village_core'
+  | 'village_power_info'
+  | 'village_power_protect'
+  | 'wolf_core'
+  | 'wolf_support'
+  | 'neutral';
+
 export interface AssignedRole {
   userId: string;
   role: RoleName;
