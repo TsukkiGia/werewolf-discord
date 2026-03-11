@@ -7,6 +7,7 @@ export const AlphaWolfRole: RoleDefinition = {
   description:
     'The pack leader who hunts alongside the other wolves. ' +
     'In a future version, the Alpha Wolf will have a chance to convert a villager into a wolf instead of killing them.',
+  unique: true,
   nightAction: {
     kind: 'kill',
     target: 'player',

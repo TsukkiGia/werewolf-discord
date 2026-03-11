@@ -5,6 +5,7 @@ export const SorcererRole: RoleDefinition = {
   alignment: 'wolf',
   description:
     'A wolf-aligned information role that can learn whether a player is a wolf, the seer, or neither.',
+  unique: true,
   nightAction: {
     kind: 'inspect',
     target: 'player',

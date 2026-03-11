@@ -48,6 +48,12 @@ export interface RoleDefinition {
   description: string;
   nightAction: NightActionDefinition;
   /**
+   * When true, at most one player may hold this role in any given game.
+   * Omitting or setting false means the role may appear multiple times
+   * (e.g. villager, mason, werewolf).
+   */
+  unique?: boolean;
+  /**
    * Build the DM text shown to a player at game start when their
    * role is revealed. Each role is responsible for its own intro.
    */

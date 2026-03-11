@@ -7,6 +7,7 @@ export const WolfCubRole: RoleDefinition = {
   description:
     'A young wolf who hunts alongside the pack. ' +
     'In a future version, the pack will get an extra kill the night after the Wolf Cub dies.',
+  unique: true,
   nightAction: {
     kind: 'kill',
     target: 'player',

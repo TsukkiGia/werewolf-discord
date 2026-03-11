@@ -65,8 +65,14 @@ describe('chooseSetup', () => {
     const s7 = summarizeBuckets(roles7);
     expect(s7.buckets.wolf_core ?? 0).toBe(2);
 
+    // 10 players: Math.ceil(10/5) = 2 wolves
     const roles10 = chooseSetup(10);
     const s10 = summarizeBuckets(roles10);
-    expect(s10.buckets.wolf_core ?? 0).toBe(3);
+    expect(s10.buckets.wolf_core ?? 0).toBe(2);
+
+    // 11 players: Math.ceil(11/5) = 3 wolves
+    const roles11 = chooseSetup(11);
+    const s11 = summarizeBuckets(roles11);
+    expect(s11.buckets.wolf_core ?? 0).toBe(3);
   });
 });

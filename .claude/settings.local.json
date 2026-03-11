@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(npm test:*)",
-      "Bash(/usr/local/bin/node --version)"
-    ]
-  }
-}
