@@ -61,6 +61,7 @@ export function chooseSetup(playerCount: number): RoleName[] {
     village_power_info: 0,
     village_power_protect: 0,
     village_power_reactive: 0,
+    village_power_visit: 0,
     wolf_core: 0,
     wolf_support: 0,
     neutral: 0,

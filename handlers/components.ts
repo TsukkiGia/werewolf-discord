@@ -141,7 +141,9 @@ export async function handleNightAction(req: any, res: any, componentId: string)
         ? 'inspect'
         : def.nightAction.kind === 'protect'
           ? 'protect'
-          : 'act on';
+          : def.nightAction.kind === 'visit'
+            ? 'visit'
+            : 'act on';
 
   const confirmation =
     targetId != null

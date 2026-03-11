@@ -125,6 +125,51 @@ export function hunterPassLine(hunterId: string): string {
   return `<@${hunterId}> was eliminated and chose not to shoot.`;
 }
 
+export function harlotVisitedWolfLine(targetId: string): string {
+  const variants = [
+    `You slipped into <@${targetId}>'s home — and found a wolf waiting. You never made it back.`,
+    `Your visit to <@${targetId}> was your last. They were a wolf, and you paid for it with your life.`,
+    `<@${targetId}> welcomed you in with a smile — then bared their fangs. You did not survive the night.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function harlotVisitedTargetLine(targetId: string): string {
+  const variants = [
+    `You visited <@${targetId}> — and the wolves came for them too. You were caught in the crossfire and did not survive.`,
+    `Terrible timing. The wolves struck <@${targetId}> the same night you visited. You did not make it out.`,
+    `You chose <@${targetId}> to visit, but so did the wolves. You were in the wrong place at the wrong time.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function harlotVisitNotificationLine(): string {
+  const variants = [
+    'A mysterious visitor snuck into your home last night and slipped away before dawn. You have no idea who it was.',
+    'You had a late-night guest — charming, secretive, and gone before sunrise.',
+    'Someone paid you a visit in the night. They were gone by morning, leaving no trace.',
+  ];
+  return pickRandom(variants);
+}
+
+export function harlotSafeVisitLine(targetId: string): string {
+  const variants = [
+    `You spend the night with <@${targetId}>. Every shadow looks like fangs, but dawn finds you both alive.`,
+    `You jolt awake in <@${targetId}>'s bed, sure you heard claws. It's nothing — they are no wolf.`,
+    `You gamble on <@${targetId}> and win. No claws, no blood — you slip home before sunrise.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function wolfTargetNotHomeLine(targetId: string): string {
+  const variants = [
+    `You crept to <@${targetId}>'s door — but they weren't home. Your kill was wasted.`,
+    `<@${targetId}> was out for the night. You waited, but they never came back. Your kill is wasted.`,
+    `The house was empty. <@${targetId}> was not home tonight. You return with blood on no one's hands.`,
+  ];
+  return pickRandom(variants);
+}
+
 export function finalRolesLines(players: GamePlayerState[]): string[] {
   const roleLines =
     players.length > 0

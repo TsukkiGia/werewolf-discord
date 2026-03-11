@@ -43,7 +43,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   {
     id: 'village_power_protect',
     roles: ['doctor'],
-    slotCountForPlayers: (playerCount) => (playerCount >= 3 ? 1 : 0),
+    slotCountForPlayers: (playerCount) => (playerCount >= 5 ? 1 : 0),
   },
   {
     id: 'village_power_reactive',
@@ -57,6 +57,11 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
     slotCountForPlayers: (playerCount) => (playerCount >= 8 ? 2 : 0),
   },
   {
+    id: 'village_power_visit',
+    roles: ['harlot'],
+    slotCountForPlayers: (playerCount) => (playerCount >= 3 ? 1 : 0),
+  },
+  {
     id: 'village_core',
     roles: ['villager'],
     slotCountForPlayers: (playerCount, currentCounts) => {
@@ -65,6 +70,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
         currentCounts.village_power_info +
         currentCounts.village_power_protect +
         currentCounts.village_power_reactive +
+        currentCounts.village_power_visit +
         currentCounts.wolf_support +
         currentCounts.village_mason +
         currentCounts.neutral;

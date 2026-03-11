@@ -2,7 +2,9 @@ import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { markPlayerDead } from '../../db/players.js';
 import { WOLF_PACK_ROLES, type RoleName } from '../types.js';
+import type { HarlotVisit } from './nightResolution.js';
 import { openDmChannel, postChannelMessage } from '../../utils.js';
+import { harlotVisitedWolfLine, harlotVisitedTargetLine, harlotSafeVisitLine, harlotVisitNotificationLine } from '../strings/narration.js';
 
 /**
  * Process all seer-type night actions by DMing inspection results.
@@ -102,8 +104,8 @@ export async function processDoctorActions(
           killedDoctorIds.push(doctorId);
         }
         const dmContent = doctorDies
-          ? `You tried to protect <@${targetId}>, who turned out to be a wolf. They attacked you in return — you have been eliminated.`
-          : `You tried to protect <@${targetId}>, who turned out to be a wolf. You narrowly escaped with your life.`;
+          ? `You tried to protect <@${targetId}>, but they were a wolf in disguise. They turned on you — you did not survive.`
+          : `You tried to protect <@${targetId}>, but they were a wolf in disguise. They lunged for you, but you escaped with your life.`;
         try {
           const dmChannelId = await openDmChannel(doctorId);
           await postChannelMessage(dmChannelId, { content: dmContent });
@@ -113,7 +115,7 @@ export async function processDoctorActions(
         if (doctorDies && channelId) {
           try {
             await postChannelMessage(channelId, {
-              content: `<@${doctorId}> went to protect a wolf and paid with their life.`,
+              content: `<@${doctorId}> tried to shield a wolf in disguise and was killed for it.`,
             });
           } catch (err) {
             console.error('Failed to send doctor wolf-death channel message', err);
@@ -130,11 +132,11 @@ export async function processDoctorActions(
       const isSelf = targetId === doctorId;
       const content = isSelf
         ? saved
-          ? 'You protected yourself. The wolves came for you tonight, but you survived.'
-          : 'You protected yourself. The wolves left you alone tonight.'
+          ? 'You guarded yourself tonight. The wolves came for you, but your defenses held.'
+          : 'You guarded yourself tonight. The wolves never came.'
         : saved
-          ? `You protected <@${targetId}>. The wolves attacked them tonight, but you saved their life.`
-          : `You protected <@${targetId}>. Nothing happened to them tonight.`;
+          ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
+          : `You watched over <@${targetId}>. The night passed quietly.`;
 
       try {
         const dmChannelId = await openDmChannel(doctorId);
@@ -146,4 +148,77 @@ export async function processDoctorActions(
   );
 
   return { anySaved, killedDoctorIds };
+}
+
+/**
+ * Process harlot visit actions.
+ *
+ * - Visiting a wolf-core player: harlot is killed.
+ * - Visiting the wolf's chosen kill target (regardless of whether doctor saved them): harlot is killed.
+ * - Otherwise: harlot survives and is told the visited player was not a wolf.
+ *
+ * The "not home" mechanic (wolves targeting a visiting harlot) is handled
+ * upstream in the orchestrator before this function is called.
+ */
+export async function processHarlotActions(
+  players: GamePlayerState[],
+  visitActions: HarlotVisit[],
+  wolfChosenVictimId: string | null,
+  gameId: string,
+  channelId: string | null,
+): Promise<{ killedHarlotIds: string[] }> {
+  const killedHarlotIds: string[] = [];
+
+  await Promise.all(
+    visitActions.map(async (visit) => {
+      const { harlotId, targetId } = visit;
+      const target = players.find((p) => p.user_id === targetId);
+      if (!target) return;
+
+      const visitedWolf = WOLF_PACK_ROLES.has(target.role as RoleName);
+      const visitedWolfTarget = targetId === wolfChosenVictimId;
+
+      let dmContent: string;
+
+      if (visitedWolf) {
+        await markPlayerDead(gameId, harlotId);
+        killedHarlotIds.push(harlotId);
+        dmContent = harlotVisitedWolfLine(targetId);
+        if (channelId) {
+          try {
+            await postChannelMessage(channelId, {
+              content: `<@${harlotId}> slipped into the wrong bed last night — a wolf was waiting. They never saw the dawn.`,
+            });
+          } catch (err) {
+            console.error('Failed to send harlot wolf-death channel message', err);
+          }
+        }
+      } else if (visitedWolfTarget) {
+        await markPlayerDead(gameId, harlotId);
+        killedHarlotIds.push(harlotId);
+        dmContent = harlotVisitedTargetLine(targetId);
+      } else {
+        dmContent = harlotSafeVisitLine(targetId);
+      }
+
+      try {
+        const dmChannelId = await openDmChannel(harlotId);
+        await postChannelMessage(dmChannelId, { content: dmContent });
+      } catch (err) {
+        console.error('Failed to DM harlot visit result', err);
+      }
+
+      // Notify the visited player (only on safe visits — dead players don't get DMs)
+      if (!visitedWolf && !visitedWolfTarget) {
+        try {
+          const targetDmChannelId = await openDmChannel(targetId);
+          await postChannelMessage(targetDmChannelId, { content: harlotVisitNotificationLine() });
+        } catch (err) {
+          console.error('Failed to DM harlot visit notification to target', err);
+        }
+      }
+    }),
+  );
+
+  return { killedHarlotIds };
 }

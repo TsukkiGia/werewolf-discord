@@ -1,4 +1,4 @@
-export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'mason' | 'sorcerer' | 'hunter' | 'wolf_cub' | 'alpha_wolf';
+export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'mason' | 'sorcerer' | 'hunter' | 'wolf_cub' | 'alpha_wolf' | 'harlot';
 
 /** The wolf_core roles that form the pack (excludes wolf_support like sorcerer). */
 export const WOLF_PACK_ROLES: ReadonlySet<RoleName> = new Set(['werewolf', 'wolf_cub', 'alpha_wolf']);
@@ -13,6 +13,7 @@ export type RoleBucket =
   | 'village_power_info'
   | 'village_power_protect'
   | 'village_power_reactive'
+  | 'village_power_visit'
   | 'wolf_core'
   | 'wolf_support'
   | 'neutral';
@@ -28,7 +29,7 @@ export interface RoleIntroContext {
   allAssignments: AssignedRole[];
 }
 
-export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect';
+export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit';
 
 export interface NightActionDefinition {
   kind: NightActionKind;

@@ -9,8 +9,8 @@ import {
   getPendingHunterShot,
   resolveHunterShotRecord,
 } from '../../db.js';
-import { processSeerActions, processDoctorActions } from './nightActionProcessors.js';
-import { postChannelMessage } from '../../utils.js';
+import { processSeerActions, processDoctorActions, processHarlotActions } from './nightActionProcessors.js';
+import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
 import { evaluateDayResolution } from './dayResolution.js';
 import { evaluateWinCondition, buildWinLines } from './winConditions.js';
@@ -34,6 +34,7 @@ import {
   hunterShotLine,
   lynchResultLine,
   nightVictimLine,
+  wolfTargetNotHomeLine,
 } from '../strings/narration.js';
 
 /** DM all alive players their night-action prompts and schedule the night timeout. */
@@ -83,18 +84,41 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     const claimed = await advancePhase(gameId, 'night');
     if (!claimed) return;
 
-    const { killTargets, protectTargets } = nightResolution;
+    const { killTargets, protectTargets, visitActions } = nightResolution;
 
     // --- 2. Seer inspections (DM only, no kills yet) ---
     await processSeerActions(players, actions);
 
-    // --- 3. Apply wolf kill (blocked if target is protected) ---
+    // --- 3. Apply wolf kill ---
+    // "Not home" mechanic: any player with an active visit action is away for
+    // the night. If the wolf's chosen victim is away, the kill is wasted.
     const victimId = chooseKillVictim(killTargets);
     const protectedSet = new Set(protectTargets);
+    const awayPlayerIds = new Set(actions
+      .filter((a) => a.action_kind === 'visit' && a.target_id)
+      .map((a) => a.actor_id),
+    );
     const killedIds: string[] = [];
-    if (victimId && !protectedSet.has(victimId)) {
+    if (victimId && !protectedSet.has(victimId) && !awayPlayerIds.has(victimId)) {
       killedIds.push(victimId);
       await markPlayerDead(gameId, victimId);
+    } else if (victimId && awayPlayerIds.has(victimId)) {
+      // Notify wolves that their target wasn't home.
+      const killActors = actions.filter(
+        (a) => a.action_kind === 'kill' && a.target_id === victimId,
+      );
+      await Promise.all(
+        killActors.map(async (a) => {
+          try {
+            const dmChannelId = await openDmChannel(a.actor_id);
+            await postChannelMessage(dmChannelId, {
+              content: wolfTargetNotHomeLine(victimId),
+            });
+          } catch (err) {
+            console.error('Failed to DM wolf not-home result', err);
+          }
+        }),
+      );
     }
 
     // --- 4. Doctor actions ---
@@ -110,10 +134,22 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     );
     killedIds.push(...killedDoctorIds);
 
-    // --- 5. Refresh player state post-kills ---
+    // --- 5. Harlot actions ---
+    // Pass the original wolf-chosen victim (not actual kill result) — harlot dies
+    // if they visited whoever the wolves intended to kill, even if doctor saved them.
+    const { killedHarlotIds } = await processHarlotActions(
+      players,
+      visitActions,
+      victimId,
+      gameId,
+      game.channel_id ?? null,
+    );
+    killedIds.push(...killedHarlotIds);
+
+    // --- 6. Refresh player state post-kills ---
     const updatedPlayers = await getPlayersForGame(gameId);
 
-    // --- 6. Hunter reactive shot (if the hunter was killed tonight) ---
+    // --- 7. Hunter reactive shot (if the hunter was killed tonight) ---
     // The wolf victim is the single player killed by wolf vote (if not saved).
     // Doctor deaths are already announced inline and excluded from the dawn summary.
     const wolfVictim = victimId && killedIds.includes(victimId)
@@ -142,7 +178,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
-    // --- 7. Dawn announcement ---
+    // --- 8. Dawn announcement ---
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
@@ -181,7 +217,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
-    // --- 8. Schedule day voting and timeout ---
+    // --- 9. Schedule day voting and timeout ---
     scheduleDayVoting(gameId, upcomingDay);
     scheduleDayTimeout(gameId, upcomingDay);
   } catch (err) {

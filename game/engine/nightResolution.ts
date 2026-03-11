@@ -45,10 +45,16 @@ export interface NightResolutionResultPending {
   state: 'pending';
 }
 
+export interface HarlotVisit {
+  harlotId: string;
+  targetId: string;
+}
+
 export interface NightResolutionResultReady {
   state: 'ready';
   killTargets: string[];
   protectTargets: string[];
+  visitActions: HarlotVisit[];
 }
 
 export type NightResolutionResult =
@@ -92,10 +98,15 @@ export function evaluateNightResolution(
     .filter((a) => a.action_kind === 'protect' && a.target_id)
     .map((a) => a.target_id as string);
 
+  const visitActions: HarlotVisit[] = actions
+    .filter((a) => a.action_kind === 'visit' && a.target_id)
+    .map((a) => ({ harlotId: a.actor_id, targetId: a.target_id as string }));
+
   return {
     state: 'ready',
     killTargets,
     protectTargets,
+    visitActions,
   };
 }
 
