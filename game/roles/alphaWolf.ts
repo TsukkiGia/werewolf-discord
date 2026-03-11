@@ -1,10 +1,12 @@
 import type { RoleDefinition, RoleIntroContext } from '../types.js';
 import { WOLF_PACK_ROLES } from '../types.js';
 
-export const WerewolfRole: RoleDefinition = {
-  name: 'werewolf',
+export const AlphaWolfRole: RoleDefinition = {
+  name: 'alpha_wolf',
   alignment: 'wolf',
-  description: 'A werewolf who hunts at night and tries to avoid suspicion during the day.',
+  description:
+    'The pack leader who hunts alongside the other wolves. ' +
+    'In a future version, the Alpha Wolf will have a chance to convert a villager into a wolf instead of killing them.',
   nightAction: {
     kind: 'kill',
     target: 'player',
@@ -13,8 +15,8 @@ export const WerewolfRole: RoleDefinition = {
   },
   buildRoleIntro: ({ assignment, allAssignments }: RoleIntroContext): string => {
     const base =
-      'Your role for this Werewolf game is: **werewolf**.\n' +
-      'You are a WEREWOLF. Your goal is to eliminate the villagers without being discovered.';
+      'Your role for this Werewolf game is: **alpha_wolf**.\n' +
+      'You are the ALPHA WOLF, leader of the pack. You hunt each night and command the wolves.';
 
     const packIds = allAssignments
       .filter((a) => WOLF_PACK_ROLES.has(a.role))

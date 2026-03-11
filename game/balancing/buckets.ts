@@ -22,9 +22,9 @@ export interface BucketConfig {
 export const BUCKET_CONFIGS: BucketConfig[] = [
   {
     id: 'wolf_core',
-    roles: ['werewolf'],
+    roles: ['werewolf', 'wolf_cub', 'alpha_wolf'],
     slotCountForPlayers: (playerCount) => {
-      return Math.ceil(playerCount / 5) ;
+      return Math.ceil(playerCount / 5);
     },
   },
   {
