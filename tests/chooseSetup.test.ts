@@ -38,18 +38,18 @@ describe('chooseSetup', () => {
     const roles3 = chooseSetup(3);
     const s3 = summarizeBuckets(roles3);
     expect(roles3).toHaveLength(3);
-    // 3 players: 1 wolf_core, no power roles, rest village_core.
+    // 3 players: 1 wolf_core, 1 protect (doctor >= 3), rest village_core.
     expect(s3.buckets.wolf_core ?? 0).toBe(1);
     expect(s3.buckets.village_power_info ?? 0).toBe(0);
-    expect(s3.buckets.village_power_protect ?? 0).toBe(0);
+    expect(s3.buckets.village_power_protect ?? 0).toBe(1);
 
     const roles4 = chooseSetup(4);
     const s4 = summarizeBuckets(roles4);
     expect(roles4).toHaveLength(4);
-    // 4 players: 1 wolf_core, 1 info, rest village_core.
+    // 4 players: 1 wolf_core, 1 info, 1 protect, rest village_core.
     expect(s4.buckets.wolf_core ?? 0).toBe(1);
     expect(s4.buckets.village_power_info ?? 0).toBe(1);
-    expect(s4.buckets.village_power_protect ?? 0).toBe(0);
+    expect(s4.buckets.village_power_protect ?? 0).toBe(1);
 
     const roles5 = chooseSetup(5);
     const s5 = summarizeBuckets(roles5);

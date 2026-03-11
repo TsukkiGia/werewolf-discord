@@ -94,12 +94,15 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
     // Pass only the resolved victim (not raw wolf votes) so the doctor's
     // feedback is accurate even when wolves were tied and no kill happened.
-    const doctorSavedSomeone = await processDoctorActions(
+    const { anySaved: doctorSavedSomeone, killedDoctorIds } = await processDoctorActions(
       players,
       actions,
       victimId !== null ? [victimId] : [],
       killedIds,
+      game.channel_id ?? null,
     );
+    // Doctors killed by wolf retaliation count as night deaths.
+    killedIds.push(...killedDoctorIds);
 
     const updatedPlayers = await getPlayersForGame(gameId);
 
@@ -230,7 +233,7 @@ export async function maybeResolveDay(
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
         const wasWolf = lynched.alignment === 'wolf';
-        const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
+        const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
         const lines = [
           `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
           hunterResolveLine(),
@@ -302,7 +305,7 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       if (targetId) {
         const target = updatedPlayers.find((p) => p.user_id === targetId);
         const wasWolf = target?.alignment === 'wolf';
-        const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
+        const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
         lines.push(`<@${hunterId}> was eliminated, but took <@${targetId}> down with them. They were ${roleSummary}.`);
       } else {
         lines.push(`<@${hunterId}> was eliminated and chose not to shoot.`);

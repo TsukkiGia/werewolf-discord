@@ -100,7 +100,7 @@ export function revealWolvesLine(wolfMentions: string): string {
 
 export function nightVictimLine(userId: string, alignment: Alignment | null): string {
   const wasWolf = alignment === 'wolf';
-  const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
+  const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
 
   const variants = [
     `<@${userId}> was killed during the night. They were ${roleSummary}.`,
