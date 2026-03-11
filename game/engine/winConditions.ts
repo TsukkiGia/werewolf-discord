@@ -3,9 +3,10 @@ import {
   revealWolvesLine,
   townWinLine,
   wolfWinLine,
+  arsonistWinLine,
 } from '../strings/narration.js';
 
-export type WinSide = 'wolves' | 'town';
+export type WinSide = 'wolves' | 'town' | 'arsonist';
 
 export interface WinResult {
   winner: WinSide;
@@ -28,7 +29,13 @@ export function buildWinLines(win: WinResult): string[] {
       ? win.wolves.map((p) => `<@${p.user_id}>`).join(', ')
       : null;
 
-  lines.push(win.winner === 'town' ? townWinLine() : wolfWinLine());
+  if (win.winner === 'town') {
+    lines.push(townWinLine());
+  } else if (win.winner === 'wolves') {
+    lines.push(wolfWinLine());
+  } else {
+    lines.push(arsonistWinLine());
+  }
 
   if (wolfMentions) {
     lines.push(revealWolvesLine(wolfMentions));
@@ -53,6 +60,12 @@ export function evaluateWinCondition(players: GamePlayerState[]): WinResult | nu
   const wolvesAlive = alive.filter((p) => p.alignment === 'wolf').length;
   const townAlive = alive.filter((p) => p.alignment === 'town').length;
   const wolfPlayers = players.filter((p) => p.alignment === 'wolf');
+
+  // Arsonist wins if they are the only player left alive.
+  const arsonistsAlive = alive.filter((p) => p.role === 'arsonist').length;
+  if (alive.length === 1 && arsonistsAlive === 1) {
+    return { winner: 'arsonist', wolves: wolfPlayers };
+  }
 
   if (wolvesAlive === 0 && wolfPlayers.length > 0) {
     return { winner: 'town', wolves: wolfPlayers };

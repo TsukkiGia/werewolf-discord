@@ -10,12 +10,13 @@ export type RoleName =
   | 'alpha_wolf'
   | 'harlot'
   | 'clumsy_guy'
-  | 'chemist';
+  | 'chemist'
+  | 'arsonist';
 
 /** The wolf_core roles that form the pack (excludes wolf_support like sorcerer). */
 export const WOLF_PACK_ROLES: ReadonlySet<RoleName> = new Set(['werewolf', 'wolf_cub', 'alpha_wolf']);
 
-export type Alignment = 'wolf' | 'town';
+export type Alignment = 'wolf' | 'town' | 'neutral';
 
 // High-level balancing buckets. These describe how a role is used when
 // constructing setups, independent of its exact name.

@@ -11,6 +11,7 @@ import { AlphaWolfRole } from '../roles/alphaWolf.js';
 import { HarlotRole } from '../roles/harlot.js';
 import { ClumsyGuyRole } from '../roles/clumsyGuy.js';
 import { ChemistRole } from '../roles/chemist.js';
+import { ArsonistRole } from '../roles/arsonist.js';
 import type { RoleName } from '../types.js';
 
 export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
@@ -26,6 +27,7 @@ export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
   harlot: HarlotRole,
   clumsy_guy: ClumsyGuyRole,
   chemist: ChemistRole,
+  arsonist: ArsonistRole,
 };
 
 export function isRoleName(value: unknown): value is RoleName {

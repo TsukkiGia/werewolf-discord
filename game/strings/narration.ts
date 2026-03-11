@@ -107,6 +107,15 @@ export function wolfWinLine(): string {
   return pickRandom(variants);
 }
 
+export function arsonistWinLine(): string {
+  const variants = [
+    'The last embers die out. The Arsonist stands alone amid the ashes. Arsonist wins!',
+    'The village is nothing but char and smoke now. Only the Arsonist walks away. Arsonist wins!',
+    'Every house is burned, every foe reduced to ash. The Arsonist is the sole survivor — Arsonist wins!',
+  ];
+  return pickRandom(variants);
+}
+
 export function revealWolvesLine(wolfMentions: string): string {
   const variants = [
     `The werewolves were: ${wolfMentions}.`,
@@ -229,6 +238,15 @@ export function chemistTargetDeathLine(victimId: string): string {
     `<@${victimId}> is discovered dead, reeking of strange potions. Last night’s “tasting session” was clearly fatal.`,
     `At dawn, <@${victimId}> is found with blackened lips and shattered vials nearby — poisoned by a bad brew.`,
     `<@${victimId}> never woke up after sharing mysterious potions in the night. The smell of alchemy still hangs in the air.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function arsonistFireDeathLine(victimId: string): string {
+  const variants = [
+    `<@${victimId}> is found in a charred ruin, the house burned to the ground in an unnatural blaze.`,
+    `When <@${victimId}> finally stumbled home, the kerosene-soaked house erupted around them. They never made it back out.`,
+    `The village wakes to the smell of ash — <@${victimId}>'s house burned in the night, leaving no survivors inside.`,
   ];
   return pickRandom(variants);
 }

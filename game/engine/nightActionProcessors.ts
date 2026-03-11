@@ -4,7 +4,13 @@ import { markPlayerDead } from '../../db/players.js';
 import { WOLF_PACK_ROLES, type RoleName } from '../types.js';
 import type { HarlotVisit } from './nightResolution.js';
 import { openDmChannel, postChannelMessage } from '../../utils.js';
-import { harlotVisitedWolfLine, harlotVisitedTargetLine, harlotSafeVisitLine, harlotVisitNotificationLine } from '../strings/narration.js';
+import {
+  harlotVisitedWolfLine,
+  harlotVisitedTargetLine,
+  harlotSafeVisitLine,
+  harlotVisitNotificationLine,
+} from '../strings/narration.js';
+import { addDousedTarget, clearDousedTargets, getDousedTargets } from '../../db/arsonist.js';
 
 /**
  * Process all seer-type night actions by DMing inspection results.
@@ -300,4 +306,104 @@ export async function processChemistActions(
   }
 
   return { killedIds: killedByChemist, duels };
+}
+
+export interface ArsonistActionResult {
+  killedIds: string[];
+  burnedVictimIds: string[];
+}
+
+/**
+ * Process Arsonist actions.
+ *
+ * - On a "douse" night, the Arsonist targets a player and their house is added
+ *   to the persistent doused set for the game.
+ * - On an "ignite" night, the Arsonist targets the special value "__ARSONIST_IGNITE__".
+ *   All doused houses are burned, killing the occupants and any visitors:
+ *   - The doused player themselves.
+ *   - Any doctors protecting that player.
+ *   - Any visitors whose action targets that player.
+ *
+ * Doctor protection does not prevent arsonist kills.
+ */
+export async function processArsonistActions(
+  gameId: string,
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+  killedIds: string[],
+): Promise<ArsonistActionResult> {
+  const arsonists = players.filter((p) => p.is_alive && p.role === 'arsonist');
+  if (arsonists.length === 0) {
+    return { killedIds: [], burnedVictimIds: [] };
+  }
+
+  const arsonist = arsonists[0]!;
+  const action = actions.find(
+    (a) =>
+      a.actor_id === arsonist.user_id &&
+      a.role === 'arsonist' &&
+      a.action_kind === 'potion',
+  );
+
+  if (!action) {
+    return { killedIds: [], burnedVictimIds: [] };
+  }
+
+  const currentDoused = await getDousedTargets(gameId);
+
+  // Ignite all doused houses
+  if (action.target_id === '__ARSONIST_IGNITE__') {
+    if (currentDoused.length === 0) {
+      return { killedIds: [], burnedVictimIds: [] };
+    }
+
+    const victims = new Set<string>();
+
+    for (const houseId of currentDoused) {
+      // Occupant
+      victims.add(houseId);
+
+      for (const a of actions) {
+        // Doctors protecting this house
+        if (a.action_kind === 'protect' && a.target_id === houseId) {
+          victims.add(a.actor_id);
+        }
+        // Visitors (e.g., harlot)
+        if (a.action_kind === 'visit' && a.target_id === houseId) {
+          victims.add(a.actor_id);
+        }
+        // Potion-based visitors (e.g., chemist)
+        if (a.action_kind === 'potion' && a.target_id === houseId) {
+          victims.add(a.actor_id);
+        }
+      }
+    }
+
+    const killedByFire: string[] = [];
+    for (const victimId of victims) {
+      if (!killedIds.includes(victimId)) {
+        await markPlayerDead(gameId, victimId);
+        killedByFire.push(victimId);
+      }
+    }
+
+    await clearDousedTargets(gameId);
+
+    return { killedIds: killedByFire, burnedVictimIds: killedByFire };
+  }
+
+  // Otherwise this night is a douse.
+  if (action.target_id) {
+    await addDousedTarget(gameId, action.target_id);
+    try {
+      const dmChannelId = await openDmChannel(arsonist.user_id);
+      await postChannelMessage(dmChannelId, {
+        content: `You quietly drenched <@${action.target_id}>’s house in kerosene. It will stay primed until you choose to ignite.`,
+      });
+    } catch (err) {
+      console.error('Failed to DM arsonist douse result', err);
+    }
+  }
+
+  return { killedIds: [], burnedVictimIds: [] };
 }

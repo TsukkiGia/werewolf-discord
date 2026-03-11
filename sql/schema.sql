@@ -85,3 +85,9 @@ CREATE TABLE IF NOT EXISTS hunter_shots (
   created_at BIGINT NOT NULL,
   UNIQUE (game_id, hunter_id)
 );
+
+CREATE TABLE IF NOT EXISTS arsonist_douses (
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  target_id TEXT NOT NULL,
+  PRIMARY KEY (game_id, target_id)
+);

@@ -24,7 +24,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
     id: 'wolf_core',
     roles: ['werewolf', 'wolf_cub', 'alpha_wolf'],
     slotCountForPlayers: (playerCount) => {
-      return Math.ceil(playerCount / 5);
+      return 0;
     },
   },
   {
@@ -38,7 +38,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   {
     id: 'village_power_info',
     roles: ['seer'],
-    slotCountForPlayers: (playerCount) => (playerCount >= 4 ? 1 : 0),
+    slotCountForPlayers: (playerCount) => (playerCount >= 5 ? 1 : 0),
   },
   {
     id: 'village_power_protect',
@@ -60,6 +60,11 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
     id: 'village_power_visit',
     roles: ['chemist', 'harlot'],
     slotCountForPlayers: (playerCount) => (playerCount >= 6 ? 1 : 0),
+  },
+  {
+    id: 'neutral',
+    roles: ['arsonist'],
+    slotCountForPlayers: (playerCount) => (playerCount >= 3 ? 1 : 0),
   },
   {
     id: 'village_core',

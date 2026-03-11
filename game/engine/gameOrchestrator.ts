@@ -16,6 +16,7 @@ import {
   processDoctorActions,
   processHarlotActions,
   processChemistActions,
+  processArsonistActions,
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
@@ -47,6 +48,7 @@ import {
   harlotVisitWolfVictimDeathLine,
   chemistSelfDeathLine,
   chemistTargetDeathLine,
+  arsonistFireDeathLine,
   deathSummary,
 } from '../strings/narration.js';
 
@@ -56,7 +58,8 @@ type NightDeathCause =
   | 'harlot_visiting_wolf'
   | 'harlot_visiting_wolf_victim'
   | 'chemist_self'
-  | 'chemist_target';
+  | 'chemist_target'
+  | 'arsonist_fire';
 
 interface NightDeathInfo {
   playerId: string;
@@ -267,6 +270,16 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         }
         break;
       }
+      case 'arsonist_fire': {
+        const victim = playersById.get(death.playerId);
+        if (victim) {
+          lines.push(
+            arsonistFireDeathLine(victim.user_id) +
+              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+          );
+        }
+        break;
+      }
     }
   }
 
@@ -410,6 +423,25 @@ async function resolveNightActionsAndCollectDeaths(params: {
       playerId: duel.victimId,
       cause: duel.victimId === duel.chemistId ? 'chemist_self' : 'chemist_target',
       relatedPlayerId: duel.victimId === duel.chemistId ? duel.targetId : duel.chemistId,
+    });
+  }
+
+  // --- Arsonist actions ---
+  const arsonistResult = await processArsonistActions(
+    gameId,
+    players,
+    actions,
+    killedIds,
+  );
+  for (const id of arsonistResult.killedIds) {
+    if (!killedIds.includes(id)) {
+      killedIds.push(id);
+    }
+  }
+  for (const victimId of arsonistResult.burnedVictimIds) {
+    nightDeaths.push({
+      playerId: victimId,
+      cause: 'arsonist_fire',
     });
   }
 

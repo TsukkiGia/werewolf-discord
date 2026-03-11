@@ -8,6 +8,7 @@ import type { GamePlayerState } from '../../db/players.js';
 import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
 import { DiscordRequest, openDmChannel, postChannelMessage, patchChannelMessage } from '../../utils.js';
 import { recordNightActionPrompt } from '../../db/nightActions.js';
+import { getDousedTargets } from '../../db/arsonist.js';
 import { recordDayVotePrompt, getDayVotePrompts } from '../../db/dayVotePrompts.js';
 import { logEvent } from '../../logging.js';
 
@@ -64,6 +65,11 @@ async function dmNightPromptsCore(params: {
 }): Promise<void> {
   const { game, playerIds, assignments, nightNumber } = params;
 
+  const dousedTargets =
+    assignments.some((a) => a.role === 'arsonist') && game.id
+      ? await getDousedTargets(game.id)
+      : [];
+
   for (const assignment of assignments) {
     try {
       const def = ROLE_REGISTRY[assignment.role];
@@ -73,15 +79,31 @@ async function dmNightPromptsCore(params: {
         continue;
       }
 
-      const baseContent = def.nightAction.prompt
+      let baseContent = def.nightAction.prompt
         ? def.nightAction.prompt.replace('{night}', String(nightNumber))
         : `Night ${nightNumber}: choose your night target.`;
+
+      if (def.name === 'arsonist' && dousedTargets.length > 0) {
+        const dousedLabels = await Promise.all(
+          dousedTargets.map((id) => getDisplayName(id, game.guild_id)),
+        );
+        baseContent += `\nAlready doused: ${dousedLabels.join(', ')}`;
+      }
 
       const options = [];
       for (const id of playerIds) {
         if (!def.nightAction.canTargetSelf && id === assignment.userId) continue;
+        // Arsonist can only see undoused houses as douse targets.
+        if (def.name === 'arsonist' && dousedTargets.includes(id)) continue;
         const label = await getDisplayName(id, game.guild_id);
         options.push({ label, value: id });
+      }
+
+      if (def.name === 'arsonist' && dousedTargets.length > 0) {
+        options.unshift({
+          label: '🔥 Ignite all doused houses',
+          value: '__ARSONIST_IGNITE__',
+        });
       }
 
       if (options.length === 0) continue;
