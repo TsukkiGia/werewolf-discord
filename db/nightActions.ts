@@ -138,10 +138,27 @@ export async function processSeerActions(
       const target = players.find((p) => p.user_id === action.target_id);
       if (!target) return;
 
+      const isWolf = target.alignment === 'wolf';
+      const isSeer = target.role === 'seer';
+
+      let content: string;
+      if (action.role === 'sorcerer') {
+        if (isWolf) {
+          content = `Your vision reveals that <@${target.user_id}> is aligned with the **wolves**.`;
+        } else if (isSeer) {
+          content = `Your vision reveals that <@${target.user_id}> is the **Seer**.`;
+        } else {
+          content = `Your vision reveals that <@${target.user_id}> is neither a wolf nor the Seer.`;
+        }
+      } else {
+        // Default seer-like behavior: reveal exact role.
+        content = `Your vision reveals that <@${target.user_id}> is **${target.role}**.`;
+      }
+
       try {
         const dmChannelId = await openDmChannel(action.actor_id);
         await postChannelMessage(dmChannelId, {
-          content: `Your vision reveals that <@${target.user_id}> is **${target.role}**.`,
+          content,
         });
       } catch (err) {
         console.error('Failed to DM seer inspection result', err);

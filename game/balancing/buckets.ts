@@ -31,6 +31,14 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
     },
   },
   {
+    id: 'wolf_support',
+    roles: ['sorcerer'],
+    slotCountForPlayers: (playerCount) => {
+      // Introduce Sorcerer in medium+ games to support the wolves.
+      return playerCount >= 7 ? 1 : 0;
+    },
+  },
+  {
     id: 'village_power_info',
     roles: ['seer'],
     slotCountForPlayers: (playerCount) => (playerCount >= 4 ? 1 : 0),

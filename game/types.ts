@@ -1,4 +1,4 @@
-export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'mason';
+export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'mason' | 'sorcerer';
 
 export type Alignment = 'wolf' | 'town';
 
