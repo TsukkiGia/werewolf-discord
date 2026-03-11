@@ -64,9 +64,7 @@ async function dmNightPromptsCore(params: {
   for (const assignment of assignments) {
     try {
       const dmChannelId = await openDmChannel(assignment.userId);
-
       const def = ROLE_REGISTRY[assignment.role];
-      const roleLine = def.dmIntro;
 
       const baseContent = `Night ${nightNumber}: choose your night target.`;
 
@@ -141,6 +139,15 @@ async function dmNightPromptsCore(params: {
  * This does not include any night-action components; those are
  * handled separately by dmNightActionsForAlivePlayers.
  */
+export function buildRoleIntroForAssignment(
+  assignment: AssignedRole,
+  allAssignments: AssignedRole[],
+): string {
+  const def = ROLE_REGISTRY[assignment.role];
+
+  return def.buildRoleIntro({ assignment, allAssignments });
+}
+
 export async function dmRolesForAssignments(params: {
   game: GameRow;
   assignments: AssignedRole[];
@@ -150,8 +157,7 @@ export async function dmRolesForAssignments(params: {
   for (const assignment of assignments) {
     try {
       const dmChannelId = await openDmChannel(assignment.userId);
-      const def = ROLE_REGISTRY[assignment.role];
-      const baseContent = `Your role for this Werewolf game is: **${assignment.role}**.\n${def.dmIntro}`;
+      const baseContent = buildRoleIntroForAssignment(assignment, assignments);
 
       await postChannelMessage(dmChannelId, {
         content: baseContent,

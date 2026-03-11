@@ -1,4 +1,4 @@
-export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor';
+export type RoleName = 'werewolf' | 'villager' | 'seer' | 'doctor' | 'mason';
 
 export type Alignment = 'wolf' | 'town';
 
@@ -18,6 +18,11 @@ export interface AssignedRole {
   alignment: Alignment;
 }
 
+export interface RoleIntroContext {
+  assignment: AssignedRole;
+  allAssignments: AssignedRole[];
+}
+
 export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect';
 
 export interface NightActionDefinition {
@@ -31,6 +36,10 @@ export interface RoleDefinition {
   name: RoleName;
   alignment: Alignment;
   description: string;
-  dmIntro: string;
   nightAction: NightActionDefinition;
+  /**
+   * Build the DM text shown to a player at game start when their
+   * role is revealed. Each role is responsible for its own intro.
+   */
+  buildRoleIntro: (ctx: RoleIntroContext) => string;
 }

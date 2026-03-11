@@ -42,7 +42,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   },
   {
     id: 'village_core',
-    roles: ['villager'],
+    roles: ['villager', 'mason'],
     slotCountForPlayers: (playerCount, currentCounts) => {
       const used =
         currentCounts.wolf_core +
