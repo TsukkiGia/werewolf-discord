@@ -66,30 +66,36 @@ async function dmNightPromptsCore(params: {
 
   for (const assignment of assignments) {
     try {
-      const dmChannelId = await openDmChannel(assignment.userId);
       const def = ROLE_REGISTRY[assignment.role];
 
-      const defaultContent = `Night ${nightNumber}: choose your night target.`;
-      const baseContent =
-        def.nightAction.prompt
-          ? def.nightAction.prompt.replace('{night}', String(nightNumber))
-          : defaultContent;
+      // Skip entirely if this role has no player-targeted night action.
+      if (def.nightAction.target !== 'player' || def.nightAction.kind === 'none') {
+        continue;
+      }
 
-      const components: any[] = [];
+      const baseContent = def.nightAction.prompt
+        ? def.nightAction.prompt.replace('{night}', String(nightNumber))
+        : `Night ${nightNumber}: choose your night target.`;
 
-      const hasNightAction =
-        def.nightAction.target === 'player' && def.nightAction.kind !== 'none';
+      const options = [];
+      for (const id of playerIds) {
+        if (!def.nightAction.canTargetSelf && id === assignment.userId) continue;
+        const label = await getDisplayName(id, game.guild_id);
+        options.push({ label, value: id });
+      }
 
-      if (hasNightAction) {
-        const options = [];
-        for (const id of playerIds) {
-          if (!def.nightAction.canTargetSelf && id === assignment.userId) continue;
-          const label = await getDisplayName(id, game.guild_id);
-          options.push({ label, value: id });
-        }
+      if (options.length === 0) continue;
 
-        if (options.length > 0) {
-          components.push({
+      const dmChannelId = await openDmChannel(assignment.userId);
+
+      const msgRes = await postChannelMessage(dmChannelId, {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: [
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content: baseContent,
+          },
+          {
             type: MessageComponentTypes.ACTION_ROW,
             components: [
               {
@@ -101,38 +107,18 @@ async function dmNightPromptsCore(params: {
                 options,
               },
             ],
-          });
-        }
-      }
+          },
+        ],
+      });
 
-      if (components.length && hasNightAction) {
-        const msgRes = await postChannelMessage(dmChannelId, {
-          // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
-          // not the legacy `content` field.
-          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-          components: [
-            {
-              type: MessageComponentTypes.TEXT_DISPLAY,
-              content: baseContent,
-            },
-            ...components,
-          ],
-        });
-
-        const msg = (await msgRes.json()) as { id?: string };
-        if (msg.id) {
-          await recordNightActionPrompt({
-            gameId: game.id,
-            night: nightNumber,
-            userId: assignment.userId,
-            channelId: dmChannelId,
-            messageId: msg.id,
-          });
-        }
-      } else {
-        await postChannelMessage(dmChannelId, {
-          // No components v2 here, so plain content is fine.
-          content: baseContent,
+      const msg = (await msgRes.json()) as { id?: string };
+      if (msg.id) {
+        await recordNightActionPrompt({
+          gameId: game.id,
+          night: nightNumber,
+          userId: assignment.userId,
+          channelId: dmChannelId,
+          messageId: msg.id,
         });
       }
     } catch (err) {

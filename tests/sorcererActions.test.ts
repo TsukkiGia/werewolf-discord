@@ -19,7 +19,7 @@ vi.mock('../utils.js', () => ({
 }));
 
 // Import after mocking so the mocks are in place
-const { processSeerActions } = await import('../db/nightActions.js');
+const { processSeerActions } = await import('../game/engine/nightActionProcessors.js');
 
 const players: GamePlayerState[] = [
   { user_id: 'wolf1', role: 'werewolf', alignment: 'wolf', is_alive: true },

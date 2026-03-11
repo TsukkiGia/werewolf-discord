@@ -91,7 +91,7 @@ export async function processDoctorActions(
 
       // Doctor tried to protect a wolf — risky move.
       if (WOLF_PACK_ROLES.has(target.role as RoleName)) {
-        const doctorDies = Math.random() < 0.5;
+        const doctorDies = Math.random() < 0.75;
         if (doctorDies) {
           await markPlayerDead(action.game_id, doctorId);
           killedDoctorIds.push(doctorId);
