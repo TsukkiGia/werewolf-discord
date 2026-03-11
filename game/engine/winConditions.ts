@@ -1,4 +1,9 @@
 import type { GamePlayerState } from '../../db/players.js';
+import {
+  revealWolvesLine,
+  townWinLine,
+  wolfWinLine,
+} from '../strings/narration.js';
 
 export type WinSide = 'wolves' | 'town';
 
@@ -23,14 +28,10 @@ export function buildWinLines(win: WinResult): string[] {
       ? win.wolves.map((p) => `<@${p.user_id}>`).join(', ')
       : null;
 
-  lines.push(
-    win.winner === 'town'
-      ? 'Town has eliminated all werewolves. Town wins!'
-      : 'Wolves now control the village. Wolves win!',
-  );
+  lines.push(win.winner === 'town' ? townWinLine() : wolfWinLine());
 
   if (wolfMentions) {
-    lines.push(`The werewolves were: ${wolfMentions}.`);
+    lines.push(revealWolvesLine(wolfMentions));
   }
 
   return lines;

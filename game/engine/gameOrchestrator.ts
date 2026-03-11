@@ -26,6 +26,13 @@ import { triggerHunterShot } from './hunterShot.js';
 import { scheduleDayVoting } from '../../jobs/dayVoting.js';
 import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
 import { scheduleDayTimeout } from '../../jobs/dayTimeout.js';
+import {
+  dawnIntroLine,
+  dawnNoVictimLine,
+  doctorSavedRumorLine,
+  hunterResolveLine,
+  nightVictimLine,
+} from '../strings/narration.js';
 
 function buildFinalRolesLines(players: GamePlayerState[]): string[] {
   const header = 'Final roles:';
@@ -105,15 +112,11 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
         const victims = updatedPlayers.filter((p) => killedIds.includes(p.user_id));
-        const lines: string[] = ['Dawn breaks.'];
+        const lines: string[] = [dawnIntroLine()];
         lines.push(
-          ...victims.map((v) => {
-            const wasWolf = v.alignment === 'wolf';
-            const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
-            return `<@${v.user_id}> was eliminated during the night. They were ${roleSummary}.`;
-          }),
+          ...victims.map((v) => nightVictimLine(v.user_id, v.alignment as any)),
         );
-        lines.push("The Hunter's eyes flash with resolve...");
+        lines.push(hunterResolveLine());
         try {
           await postChannelMessage(game.channel_id, { content: lines.join('\n') });
         } catch (err) {
@@ -131,20 +134,14 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       const lines: string[] = [];
 
       if (victims.length === 0) {
-        lines.push('Dawn breaks. No one was eliminated during the night.');
+        lines.push(dawnNoVictimLine());
         if (doctorSavedSomeone) {
-          lines.push(
-            'Rumor spreads through the village: the wolves tried to attack someone, but they were protected by the doctor.',
-          );
+          lines.push(doctorSavedRumorLine());
         }
       } else {
-        lines.push('Dawn breaks.');
+        lines.push(dawnIntroLine());
         lines.push(
-          ...victims.map((v) => {
-            const wasWolf = v.alignment === 'wolf';
-            const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
-            return `<@${v.user_id}> was eliminated during the night. They were ${roleSummary}.`;
-          }),
+          ...victims.map((v) => nightVictimLine(v.user_id, v.alignment as any)),
         );
       }
 
@@ -236,7 +233,7 @@ export async function maybeResolveDay(
         const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
         const lines = [
           `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
-          "The Hunter's eyes flash with resolve...",
+          hunterResolveLine(),
         ];
         try {
           await postChannelMessage(game.channel_id, { content: lines.join('\n') });
