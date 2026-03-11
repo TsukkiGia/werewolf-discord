@@ -54,7 +54,8 @@ export async function processSeerActions(
 export interface DoctorActionResult {
   anySaved: boolean;
   /** IDs of doctors killed by wolf retaliation (protected a wolf, 50% death roll). */
-  killedDoctorIds: string[];
+  killedDoctorId: string | null;
+  doctorDeathInfo: { doctorId: string; wolfTargetId: string } | null;
 }
 
 /**
@@ -74,14 +75,14 @@ export async function processDoctorActions(
   actions: NightActionRow[],
   killTargets: string[],
   killedIds: string[],
-  channelId: string | null,
 ): Promise<DoctorActionResult> {
   const protectActions = actions.filter(
     (a) => a.action_kind === 'protect' && a.target_id,
   );
 
   let anySaved = false;
-  const killedDoctorIds: string[] = [];
+  let killedDoctorId: string | null = null;
+  let doctorDeathInfo: { doctorId: string; wolfTargetId: string } | null = null;
 
   await Promise.all(
     protectActions.map(async (action) => {
@@ -101,7 +102,8 @@ export async function processDoctorActions(
         const doctorDies = Math.random() < 0.75;
         if (doctorDies) {
           await markPlayerDead(action.game_id, doctorId);
-          killedDoctorIds.push(doctorId);
+          killedDoctorId = doctorId;
+          doctorDeathInfo = { doctorId, wolfTargetId: targetId };
         }
         const dmContent = doctorDies
           ? `You tried to protect <@${targetId}>, but they were a wolf in disguise. They turned on you — you did not survive.`
@@ -111,15 +113,6 @@ export async function processDoctorActions(
           await postChannelMessage(dmChannelId, { content: dmContent });
         } catch (err) {
           console.error('Failed to DM doctor wolf-protection result', err);
-        }
-        if (doctorDies && channelId) {
-          try {
-            await postChannelMessage(channelId, {
-              content: `<@${doctorId}> tried to shield a wolf in disguise and was killed for it.`,
-            });
-          } catch (err) {
-            console.error('Failed to send doctor wolf-death channel message', err);
-          }
         }
         return;
       }
@@ -147,7 +140,7 @@ export async function processDoctorActions(
     }),
   );
 
-  return { anySaved, killedDoctorIds };
+  return { anySaved, killedDoctorId, doctorDeathInfo };
 }
 
 /**
@@ -160,14 +153,19 @@ export async function processDoctorActions(
  * The "not home" mechanic (wolves targeting a visiting harlot) is handled
  * upstream in the orchestrator before this function is called.
  */
+export interface HarlotActionResult {
+  killedHarlotIds: string[];
+  harlotDeathInfos: { harlotId: string; targetId: string; cause: 'visited_wolf' | 'visited_victim' }[];
+}
+
 export async function processHarlotActions(
   players: GamePlayerState[],
   visitActions: HarlotVisit[],
   wolfChosenVictimId: string | null,
   gameId: string,
-  channelId: string | null,
-): Promise<{ killedHarlotIds: string[] }> {
+): Promise<HarlotActionResult> {
   const killedHarlotIds: string[] = [];
+  const harlotDeathInfos: { harlotId: string; targetId: string; cause: 'visited_wolf' | 'visited_victim' }[] = [];
 
   await Promise.all(
     visitActions.map(async (visit) => {
@@ -183,19 +181,12 @@ export async function processHarlotActions(
       if (visitedWolf) {
         await markPlayerDead(gameId, harlotId);
         killedHarlotIds.push(harlotId);
+        harlotDeathInfos.push({ harlotId, targetId, cause: 'visited_wolf' });
         dmContent = harlotVisitedWolfLine(targetId);
-        if (channelId) {
-          try {
-            await postChannelMessage(channelId, {
-              content: `<@${harlotId}> slipped into the wrong bed last night — a wolf was waiting. They never saw the dawn.`,
-            });
-          } catch (err) {
-            console.error('Failed to send harlot wolf-death channel message', err);
-          }
-        }
       } else if (visitedWolfTarget) {
         await markPlayerDead(gameId, harlotId);
         killedHarlotIds.push(harlotId);
+        harlotDeathInfos.push({ harlotId, targetId, cause: 'visited_victim' });
         dmContent = harlotVisitedTargetLine(targetId);
       } else {
         dmContent = harlotSafeVisitLine(targetId);
@@ -220,5 +211,5 @@ export async function processHarlotActions(
     }),
   );
 
-  return { killedHarlotIds };
+  return { killedHarlotIds, harlotDeathInfos };
 }

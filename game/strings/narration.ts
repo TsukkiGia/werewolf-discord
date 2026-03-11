@@ -145,9 +145,9 @@ export function harlotVisitedTargetLine(targetId: string): string {
 
 export function harlotVisitNotificationLine(): string {
   const variants = [
-    'A mysterious visitor snuck into your home last night and slipped away before dawn. You have no idea who it was.',
-    'You had a late-night guest — charming, secretive, and gone before sunrise.',
-    'Someone paid you a visit in the night. They were gone by morning, leaving no trace.',
+    'Someone slipped into your bed last night and gave you the ride of your life. By dawn, they were gone without a trace.',
+    'You woke sore and smiling — someone slid under your covers and gave you the ride of your life, then vanished before sunrise.',
+    'In the dark, a stranger eased into your bed and made the night unforgettable. By morning, they were nowhere to be found.',
   ];
   return pickRandom(variants);
 }
@@ -166,6 +166,33 @@ export function wolfTargetNotHomeLine(targetId: string): string {
     `You crept to <@${targetId}>'s door — but they weren't home. Your kill was wasted.`,
     `<@${targetId}> was out for the night. You waited, but they never came back. Your kill is wasted.`,
     `The house was empty. <@${targetId}> was not home tonight. You return with blood on no one's hands.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function doctorProtectingWolfDeathLine(doctorId: string): string {
+  const variants = [
+    `<@${doctorId}> tried to shield a wolf in disguise and was killed for it.`,
+    `<@${doctorId}> rushed to protect a “villager” who was really a wolf — they never made it back.`,
+    `<@${doctorId}> misread the signs, guarded a wolf, and paid with their life.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function harlotVisitWolfDeathLine(harlotId: string): string {
+  const variants = [
+    `<@${harlotId}> slipped into the wrong bed for the night of their life — and their last, when the wolf bared its fangs.`,
+    `What started as the ride of <@${harlotId}>'s life ended with a wolf at their throat.`,
+    `<@${harlotId}> chased midnight thrills and dove straight into a wolf’s embrace. By dawn, they were gone.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function harlotVisitWolfVictimDeathLine(harlotId: string): string {
+  const variants = [
+    `<@${harlotId}> slipped into the wrong bed for a wild night — when the wolves crashed in, the fun ended in blood.`,
+    `What began as the ride of <@${harlotId}>'s life ended in a massacre when the wolves tore through the room.`,
+    `<@${harlotId}> was tangled up in someone else’s midnight thrills when the pack struck. By dawn, <@${harlotId}> was dead.`,
   ];
   return pickRandom(variants);
 }

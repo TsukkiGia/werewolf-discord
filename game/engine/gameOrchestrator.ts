@@ -9,6 +9,7 @@ import {
   getPendingHunterShot,
   resolveHunterShotRecord,
 } from '../../db.js';
+import type { GamePlayerState } from '../../db/players.js';
 import { processSeerActions, processDoctorActions, processHarlotActions } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
@@ -35,7 +36,22 @@ import {
   lynchResultLine,
   nightVictimLine,
   wolfTargetNotHomeLine,
+  doctorProtectingWolfDeathLine,
+  harlotVisitWolfDeathLine,
+  harlotVisitWolfVictimDeathLine,
 } from '../strings/narration.js';
+
+type NightDeathCause =
+  | 'wolf_kill'
+  | 'doctor_protecting_wolf'
+  | 'harlot_visiting_wolf'
+  | 'harlot_visiting_wolf_victim';
+
+interface NightDeathInfo {
+  playerId: string;
+  cause: NightDeathCause;
+  relatedPlayerId?: string;
+}
 
 /** DM all alive players their night-action prompts and schedule the night timeout. */
 async function dmNightAndSchedule(gameId: string): Promise<void> {
@@ -99,9 +115,11 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       .map((a) => a.actor_id),
     );
     const killedIds: string[] = [];
+    const nightDeaths: NightDeathInfo[] = [];
     if (victimId && !protectedSet.has(victimId) && !awayPlayerIds.has(victimId)) {
       killedIds.push(victimId);
       await markPlayerDead(gameId, victimId);
+      nightDeaths.push({ playerId: victimId, cause: 'wolf_kill' });
     } else if (victimId && awayPlayerIds.has(victimId)) {
       // Notify wolves that their target wasn't home.
       const killActors = actions.filter(
@@ -124,38 +142,55 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     // --- 4. Doctor actions ---
     // Pass only the resolved victim (not raw wolf votes) so feedback is accurate
     // even when wolves tied and no kill happened.
-    // Doctor deaths from wolf retaliation are announced inline and merged back in.
-    const { anySaved: doctorSavedSomeone, killedDoctorIds } = await processDoctorActions(
+    // Doctor deaths from wolf retaliation are recorded in nightDeaths for dawn narration.
+    const {
+      anySaved: doctorSavedSomeone,
+      killedDoctorId,
+      doctorDeathInfo,
+    } = await processDoctorActions(
       players,
       actions,
       victimId !== null ? [victimId] : [],
       killedIds,
-      game.channel_id ?? null,
     );
-    killedIds.push(...killedDoctorIds);
+    if (killedDoctorId) {
+      killedIds.push(killedDoctorId);
+    }
+
+    if (doctorDeathInfo) {
+      nightDeaths.push({
+        playerId: doctorDeathInfo.doctorId,
+        cause: 'doctor_protecting_wolf',
+        relatedPlayerId: doctorDeathInfo.wolfTargetId,
+      });
+    }
 
     // --- 5. Harlot actions ---
     // Pass the original wolf-chosen victim (not actual kill result) — harlot dies
     // if they visited whoever the wolves intended to kill, even if doctor saved them.
-    const { killedHarlotIds } = await processHarlotActions(
+    const { killedHarlotIds, harlotDeathInfos } = await processHarlotActions(
       players,
       visitActions,
       victimId,
       gameId,
-      game.channel_id ?? null,
     );
     killedIds.push(...killedHarlotIds);
+
+    for (const info of harlotDeathInfos) {
+      nightDeaths.push({
+        playerId: info.harlotId,
+        cause:
+          info.cause === 'visited_wolf'
+            ? 'harlot_visiting_wolf'
+            : 'harlot_visiting_wolf_victim',
+        relatedPlayerId: info.targetId,
+      });
+    }
 
     // --- 6. Refresh player state post-kills ---
     const updatedPlayers = await getPlayersForGame(gameId);
 
     // --- 7. Hunter reactive shot (if the hunter was killed tonight) ---
-    // The wolf victim is the single player killed by wolf vote (if not saved).
-    // Doctor deaths are already announced inline and excluded from the dawn summary.
-    const wolfVictim = victimId && killedIds.includes(victimId)
-      ? updatedPlayers.find((p) => p.user_id === victimId) ?? null
-      : null;
-
     const killedHunter = killedIds.length > 0
       ? updatedPlayers.find((p) => killedIds.includes(p.user_id) && p.role === 'hunter')
       : null;
@@ -163,9 +198,15 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     if (killedHunter) {
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
-        const lines: string[] = [dawnIntroLine()];
-        if (wolfVictim) {
-          lines.push(nightVictimLine(wolfVictim.user_id, wolfVictim.alignment as any));
+        const lines: string[] = [];
+        if (nightDeaths.length === 0) {
+          lines.push(dawnNoVictimLine());
+          if (doctorSavedSomeone) {
+            lines.push(doctorSavedRumorLine());
+          }
+        } else {
+          lines.push(dawnIntroLine());
+          lines.push(...buildNightDeathLines(nightDeaths, updatedPlayers));
         }
         lines.push(hunterResolveLine());
         try {
@@ -184,18 +225,15 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     if (game.channel_id) {
       const lines: string[] = [];
 
-      if (!wolfVictim && killedDoctorIds.length === 0) {
-        // Quiet night — no wolf kill, no doctor death
+      if (nightDeaths.length === 0) {
+        // Quiet night — no deaths
         lines.push(dawnNoVictimLine());
         if (doctorSavedSomeone) {
           lines.push(doctorSavedRumorLine());
         }
-      } else if (wolfVictim) {
-        lines.push(dawnIntroLine());
-        lines.push(nightVictimLine(wolfVictim.user_id, wolfVictim.alignment as any));
       } else {
-        // Only doctor deaths — already announced inline, just open the day
         lines.push(dawnIntroLine());
+        lines.push(...buildNightDeathLines(nightDeaths, updatedPlayers));
       }
 
       if (win) {
@@ -223,6 +261,36 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
   } catch (err) {
     console.error('Error resolving night phase', err);
   }
+}
+
+function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayerState[]): string[] {
+  const lines: string[] = [];
+
+  for (const death of nightDeaths) {
+    switch (death.cause) {
+      case 'wolf_kill': {
+        const victim = players.find((p) => p.user_id === death.playerId);
+        if (victim) {
+          lines.push(nightVictimLine(victim.user_id, victim.alignment as any));
+        }
+        break;
+      }
+      case 'doctor_protecting_wolf': {
+        lines.push(doctorProtectingWolfDeathLine(death.playerId));
+        break;
+      }
+      case 'harlot_visiting_wolf': {
+        lines.push(harlotVisitWolfDeathLine(death.playerId));
+        break;
+      }
+      case 'harlot_visiting_wolf_victim': {
+        lines.push(harlotVisitWolfVictimDeathLine(death.playerId));
+        break;
+      }
+    }
+  }
+
+  return lines;
 }
 
 /**
