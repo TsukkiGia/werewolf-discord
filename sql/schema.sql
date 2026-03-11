@@ -18,6 +18,9 @@ ALTER TABLE games
 ALTER TABLE games
   ADD COLUMN IF NOT EXISTS join_message_id TEXT;
 
+ALTER TABLE games
+  ADD COLUMN IF NOT EXISTS wolf_extra_kills_next_night INTEGER NOT NULL DEFAULT 0;
+
 -- Ensure at most one non-ended game per (channel, guild) pair.
 CREATE UNIQUE INDEX IF NOT EXISTS active_games_per_channel
   ON games (channel_id, guild_id)

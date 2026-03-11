@@ -338,7 +338,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'w' }];
 
-    const res = await processHarlotActions(players, visits, null, 'g');
+    const res = await processHarlotActions(players, visits, [], 'g');
 
     expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'h');
     expect(res.killedHarlotIds).toEqual(['h']);
@@ -360,7 +360,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'v' }];
 
-    const res = await processHarlotActions(players, visits, 'v', 'g');
+    const res = await processHarlotActions(players, visits, ['v'], 'g');
 
     expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'h');
     expect(res.killedHarlotIds).toEqual(['h']);
@@ -380,7 +380,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'v' }];
 
-    const res = await processHarlotActions(players, visits, null, 'g');
+    const res = await processHarlotActions(players, visits, [], 'g');
 
     expect(res.killedHarlotIds).toEqual([]);
     expect(res.harlotDeathInfos).toEqual([]);

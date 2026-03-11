@@ -14,6 +14,7 @@ export interface GameRow {
   current_day: number;
   current_night: number;
   join_message_id: string | null;
+  wolf_extra_kills_next_night: number;
 }
 
 export async function createGame(params: {
@@ -80,6 +81,28 @@ export async function getActiveGameForChannel(
   );
 
   return result.rows[0] ?? null;
+}
+
+export async function incrementWolfExtraKillsForNextNight(gameId: string): Promise<void> {
+  await pool.query(
+    `
+    UPDATE games
+    SET wolf_extra_kills_next_night = 1
+    WHERE id = $1
+    `,
+    [gameId],
+  );
+}
+
+export async function clearWolfExtraKillsForNextNight(gameId: string): Promise<void> {
+  await pool.query(
+    `
+    UPDATE games
+    SET wolf_extra_kills_next_night = 0
+    WHERE id = $1
+    `,
+    [gameId],
+  );
 }
 
 export async function endGame(gameId: string): Promise<void> {

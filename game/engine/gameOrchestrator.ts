@@ -8,6 +8,8 @@ import {
   getVotesForDay,
   getPendingHunterShot,
   resolveHunterShotRecord,
+  incrementWolfExtraKillsForNextNight,
+  clearWolfExtraKillsForNextNight,
 } from '../../db.js';
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
@@ -115,6 +117,8 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     }
 
     const nightNumber = game.current_night || 1;
+    const hasWolfExtraKill = (game.wolf_extra_kills_next_night ?? 0) > 0;
+    const wolfExtraKills = hasWolfExtraKill ? 1 : 0;
 
     // --- 1. Check if all night actions are in ---
     const players = await getPlayersForGame(gameId);
@@ -150,6 +154,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       killTargets,
       protectTargets,
       visitActions,
+      wolfExtraKills,
     });
 
     // If the Wolf Cub died tonight, DM surviving pack members.
@@ -177,6 +182,11 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
           }
         }),
       );
+      await incrementWolfExtraKillsForNextNight(gameId);
+    }
+
+    if (hasWolfExtraKill) {
+      await clearWolfExtraKillsForNextNight(gameId);
     }
 
     // --- 8. Hunter reactive shot (if the hunter was killed tonight) ---
@@ -369,8 +379,18 @@ async function resolveNightActionsAndCollectDeaths(params: {
   killTargets: string[];
   protectTargets: string[];
   visitActions: { harlotId: string; targetId: string }[];
+  wolfExtraKills: number;
 }): Promise<NightActionResolutionOutcome> {
-  const { gameId, nightNumber, players, actions, killTargets, protectTargets, visitActions } =
+  const {
+    gameId,
+    nightNumber,
+    players,
+    actions,
+    killTargets,
+    protectTargets,
+    visitActions,
+    wolfExtraKills,
+  } =
     params;
 
   const harlotIds = new Set(
@@ -380,22 +400,91 @@ async function resolveNightActionsAndCollectDeaths(params: {
   // --- Wolf kill ---
   // "Not home" mechanic: any player with a night action that targets another
   // player (visit, kill, protect, potion) is away for the night.
-  // If the wolf's chosen victim is away, the kill is wasted.
-  const victimId = chooseKillVictim(killTargets);
+  // If a chosen victim is away, that kill is wasted.
+  const maxWolfVictims = 1 + wolfExtraKills;
+  const wolfChosenVictims: string[] = [];
+  let remainingKillTargets = killTargets.slice();
+  while (wolfChosenVictims.length < maxWolfVictims) {
+    const v = chooseKillVictim(remainingKillTargets);
+    if (!v) break;
+    wolfChosenVictims.push(v);
+    remainingKillTargets = remainingKillTargets.filter((id) => id !== v);
+  }
+  const victimId = wolfChosenVictims[0] ?? null;
+
   const protectedSet = new Set(protectTargets);
   const awayPlayerIds = buildAwayPlayerIds(actions);
 
   const killedIds: string[] = [];
   const nightDeaths: NightDeathInfo[] = [];
 
-  if (victimId && !protectedSet.has(victimId) && !awayPlayerIds.has(victimId)) {
+  for (const targetId of wolfChosenVictims) {
+    if (awayPlayerIds.has(targetId)) {
+      // Notify wolves that their target wasn't home.
+      const killActors = actions.filter(
+        (a) => a.action_kind === 'kill' && a.target_id === targetId,
+      );
+      await Promise.all(
+        killActors.map(async (a) => {
+          try {
+            const dmChannelId = await openDmChannel(a.actor_id);
+            await postChannelMessage(dmChannelId, {
+              content: wolfTargetNotHomeLine(targetId),
+            });
+          } catch (err) {
+            console.error('Failed to DM wolf not-home result', err);
+          }
+        }),
+      );
+
+      // Let the intended victim know the wolves came while they were out.
+      try {
+        const dmChannelId = await openDmChannel(targetId);
+        await postChannelMessage(dmChannelId, { content: wolfMissedYouAwayLine() });
+      } catch (err) {
+        console.error('Failed to DM away-target wolf miss result', err);
+      }
+      continue;
+    }
+
+    if (protectedSet.has(targetId)) {
+      // Wolves chose a victim who was at home, but the doctor blocked the kill.
+      const killActors = actions.filter(
+        (a) => a.action_kind === 'kill' && a.target_id === targetId,
+      );
+      await Promise.all(
+        killActors.map(async (a) => {
+          try {
+            const dmChannelId = await openDmChannel(a.actor_id);
+            await postChannelMessage(dmChannelId, {
+              content: wolfBlockedByDoctorLine(targetId),
+            });
+          } catch (err) {
+            console.error('Failed to DM wolf doctor-block result', err);
+          }
+        }),
+      );
+
+      // Let the saved victim know they were attacked but survived thanks to the doctor.
+      try {
+        const dmChannelId = await openDmChannel(targetId);
+        await postChannelMessage(dmChannelId, {
+          content: doctorSavedTargetLine(),
+        });
+      } catch (err) {
+        console.error('Failed to DM doctor-saved target result', err);
+      }
+      continue;
+    }
+
+    // Successful wolf kill for this chosen victim (and their visitors).
     const wolfVictims = new Set<string>();
-    wolfVictims.add(victimId);
+    wolfVictims.add(targetId);
 
     for (const a of actions) {
       if (
         (a.action_kind === 'visit' || a.action_kind === 'potion') &&
-        a.target_id === victimId &&
+        a.target_id === targetId &&
         !harlotIds.has(a.actor_id)
       ) {
         wolfVictims.add(a.actor_id);
@@ -417,58 +506,6 @@ async function resolveNightActionsAndCollectDeaths(params: {
         }
       }
     }
-  } else if (victimId && awayPlayerIds.has(victimId)) {
-    // Notify wolves that their target wasn't home.
-    const killActors = actions.filter(
-      (a) => a.action_kind === 'kill' && a.target_id === victimId,
-    );
-    await Promise.all(
-      killActors.map(async (a) => {
-        try {
-          const dmChannelId = await openDmChannel(a.actor_id);
-          await postChannelMessage(dmChannelId, {
-            content: wolfTargetNotHomeLine(victimId),
-          });
-        } catch (err) {
-          console.error('Failed to DM wolf not-home result', err);
-        }
-      }),
-    );
-
-    // Let the intended victim know the wolves came while they were out.
-    try {
-      const dmChannelId = await openDmChannel(victimId);
-      await postChannelMessage(dmChannelId, { content: wolfMissedYouAwayLine() });
-    } catch (err) {
-      console.error('Failed to DM away-target wolf miss result', err);
-    }
-  } else if (victimId && protectedSet.has(victimId)) {
-    // Wolves chose a victim who was at home, but the doctor blocked the kill.
-    const killActors = actions.filter(
-      (a) => a.action_kind === 'kill' && a.target_id === victimId,
-    );
-    await Promise.all(
-      killActors.map(async (a) => {
-        try {
-          const dmChannelId = await openDmChannel(a.actor_id);
-          await postChannelMessage(dmChannelId, {
-            content: wolfBlockedByDoctorLine(victimId),
-          });
-        } catch (err) {
-          console.error('Failed to DM wolf doctor-block result', err);
-        }
-      }),
-    );
-
-    // Let the saved victim know they were attacked but survived thanks to the doctor.
-    try {
-      const dmChannelId = await openDmChannel(victimId);
-      await postChannelMessage(dmChannelId, {
-        content: doctorSavedTargetLine(),
-      });
-    } catch (err) {
-      console.error('Failed to DM doctor-saved target result', err);
-    }
   }
 
   // --- Doctor actions ---
@@ -482,7 +519,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
   } = await processDoctorActions(
     players,
     actions,
-    victimId !== null ? [victimId] : [],
+    wolfChosenVictims,
     killedIds,
   );
   if (killedDoctorId) {
@@ -503,7 +540,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
   const { killedHarlotIds, harlotDeathInfos } = await processHarlotActions(
     players,
     visitActions,
-    victimId,
+    wolfChosenVictims,
     gameId,
   );
   killedIds.push(...killedHarlotIds);
@@ -634,7 +671,7 @@ export async function maybeResolveDay(
     await markPlayerDead(gameId, lynchId);
     const updatedPlayers = await getPlayersForGame(gameId);
 
-    // If the Wolf Cub was lynched, DM surviving pack members.
+    // If the Wolf Cub was lynched, DM surviving pack members and flag extra kill.
     if (lynched.role === 'wolf_cub') {
       const packMates = updatedPlayers.filter(
         (p) =>
@@ -654,6 +691,7 @@ export async function maybeResolveDay(
           }
         }),
       );
+      await incrementWolfExtraKillsForNextNight(gameId);
     }
 
     // --- 4. Hunter reactive shot (if the hunter was lynched) ---

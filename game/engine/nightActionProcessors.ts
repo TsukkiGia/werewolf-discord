@@ -196,7 +196,7 @@ export interface HarlotActionResult {
 export async function processHarlotActions(
   players: GamePlayerState[],
   visitActions: HarlotVisit[],
-  wolfChosenVictimId: string | null,
+  wolfChosenVictimIds: string[],
   gameId: string,
 ): Promise<HarlotActionResult> {
   const playersById = buildPlayersById(players);
@@ -210,7 +210,7 @@ export async function processHarlotActions(
       if (!target) return;
 
       const visitedWolf = WOLF_PACK_ROLES.has(target.role as RoleName);
-      const visitedWolfTarget = targetId === wolfChosenVictimId;
+      const visitedWolfTarget = wolfChosenVictimIds.includes(targetId);
 
       let dmContent: string;
 
