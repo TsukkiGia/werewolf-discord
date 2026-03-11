@@ -48,7 +48,8 @@ import {
   harlotVisitWolfVictimDeathLine,
   chemistSelfDeathLine,
   chemistTargetDeathLine,
-  arsonistFireDeathLine,
+  arsonistFireHomeDeathLine,
+  arsonistFireAwayDeathLine,
   arsonistIgniteLine,
   deathSummary,
 } from '../strings/narration.js';
@@ -60,7 +61,8 @@ type NightDeathCause =
   | 'harlot_visiting_wolf_victim'
   | 'chemist_self'
   | 'chemist_target'
-  | 'arsonist_fire';
+  | 'arsonist_fire_home'
+  | 'arsonist_fire_away';
 
 interface NightDeathInfo {
   playerId: string;
@@ -271,11 +273,21 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         }
         break;
       }
-      case 'arsonist_fire': {
+      case 'arsonist_fire_home': {
         const victim = playersById.get(death.playerId);
         if (victim) {
           lines.push(
-            arsonistFireDeathLine(victim.user_id) +
+            arsonistFireHomeDeathLine(victim.user_id) +
+              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+          );
+        }
+        break;
+      }
+      case 'arsonist_fire_away': {
+        const victim = playersById.get(death.playerId);
+        if (victim) {
+          lines.push(
+            arsonistFireAwayDeathLine(victim.user_id) +
               ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
           );
         }
@@ -302,7 +314,11 @@ function buildNightSummaryLines(
     }
   } else {
     lines.push(dawnIntroLine());
-    if (nightDeaths.some((d) => d.cause === 'arsonist_fire')) {
+    if (
+      nightDeaths.some(
+        (d) => d.cause === 'arsonist_fire_home' || d.cause === 'arsonist_fire_away',
+      )
+    ) {
       lines.push(arsonistIgniteLine());
     }
     lines.push(...buildNightDeathLines(nightDeaths, players));
@@ -442,10 +458,13 @@ async function resolveNightActionsAndCollectDeaths(params: {
       killedIds.push(id);
     }
   }
-  for (const victimId of arsonistResult.burnedVictimIds) {
+  for (const burned of arsonistResult.burnedVictims) {
     nightDeaths.push({
-      playerId: victimId,
-      cause: 'arsonist_fire',
+      playerId: burned.victimId,
+      cause:
+        burned.kind === 'occupant_away'
+          ? 'arsonist_fire_away'
+          : 'arsonist_fire_home',
     });
   }
 

@@ -308,9 +308,14 @@ export async function processChemistActions(
   return { killedIds: killedByChemist, duels };
 }
 
+export interface BurnedVictimInfo {
+  victimId: string;
+  kind: 'occupant_home' | 'occupant_away' | 'visitor';
+}
+
 export interface ArsonistActionResult {
   killedIds: string[];
-  burnedVictimIds: string[];
+  burnedVictims: BurnedVictimInfo[];
 }
 
 /**
@@ -334,7 +339,7 @@ export async function processArsonistActions(
 ): Promise<ArsonistActionResult> {
   const arsonists = players.filter((p) => p.is_alive && p.role === 'arsonist');
   if (arsonists.length === 0) {
-    return { killedIds: [], burnedVictimIds: [] };
+    return { killedIds: [], burnedVictims: [] };
   }
 
   const arsonist = arsonists[0]!;
@@ -346,7 +351,7 @@ export async function processArsonistActions(
   );
 
   if (!action) {
-    return { killedIds: [], burnedVictimIds: [] };
+    return { killedIds: [], burnedVictims: [] };
   }
 
   const currentDoused = await getDousedTargets(gameId);
@@ -354,33 +359,37 @@ export async function processArsonistActions(
   // Ignite all doused houses
   if (action.target_id === '__ARSONIST_IGNITE__') {
     if (currentDoused.length === 0) {
-      return { killedIds: [], burnedVictimIds: [] };
+      return { killedIds: [], burnedVictims: [] };
     }
 
-    const victims = new Set<string>();
+    const killedByFire: string[] = [];
+    const burnedKinds = new Map<string, BurnedVictimInfo['kind']>();
+
+    const isOutKinds = new Set<NightActionRow['action_kind']>(['visit', 'kill']);
 
     for (const houseId of currentDoused) {
-      // Occupant
-      victims.add(houseId);
+      if (killedIds.includes(houseId)) continue;
+
+      const occupantOut = actions.some(
+        (a) => a.actor_id === houseId && isOutKinds.has(a.action_kind),
+      );
+      burnedKinds.set(houseId, occupantOut ? 'occupant_away' : 'occupant_home');
 
       for (const a of actions) {
-        // Doctors protecting this house
-        if (a.action_kind === 'protect' && a.target_id === houseId) {
-          victims.add(a.actor_id);
-        }
-        // Visitors (e.g., harlot)
-        if (a.action_kind === 'visit' && a.target_id === houseId) {
-          victims.add(a.actor_id);
-        }
-        // Potion-based visitors (e.g., chemist)
-        if (a.action_kind === 'potion' && a.target_id === houseId) {
-          victims.add(a.actor_id);
+        if (
+          (a.action_kind === 'protect' ||
+            a.action_kind === 'visit' ||
+            a.action_kind === 'potion') &&
+          a.target_id === houseId
+        ) {
+          if (!burnedKinds.has(a.actor_id) && !killedIds.includes(a.actor_id)) {
+            burnedKinds.set(a.actor_id, 'visitor');
+          }
         }
       }
     }
 
-    const killedByFire: string[] = [];
-    for (const victimId of victims) {
+    for (const victimId of burnedKinds.keys()) {
       if (!killedIds.includes(victimId)) {
         await markPlayerDead(gameId, victimId);
         killedByFire.push(victimId);
@@ -389,7 +398,11 @@ export async function processArsonistActions(
 
     await clearDousedTargets(gameId);
 
-    return { killedIds: killedByFire, burnedVictimIds: killedByFire };
+    const burnedVictims: BurnedVictimInfo[] = Array.from(burnedKinds.entries()).map(
+      ([victimId, kind]) => ({ victimId, kind }),
+    );
+
+    return { killedIds: killedByFire, burnedVictims };
   }
 
   // Otherwise this night is a douse.
@@ -405,5 +418,5 @@ export async function processArsonistActions(
     }
   }
 
-  return { killedIds: [], burnedVictimIds: [] };
+  return { killedIds: [], burnedVictims: [] };
 }

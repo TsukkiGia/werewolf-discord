@@ -242,11 +242,20 @@ export function chemistTargetDeathLine(victimId: string): string {
   return pickRandom(variants);
 }
 
-export function arsonistFireDeathLine(victimId: string): string {
+export function arsonistFireHomeDeathLine(victimId: string): string {
   const variants = [
     `<@${victimId}> is found in a charred ruin, the house burned to the ground in an unnatural blaze.`,
-    `When <@${victimId}> finally stumbled home, the kerosene-soaked house erupted around them. They never made it back out.`,
-    `The village wakes to the smell of ash — <@${victimId}>'s house burned in the night, leaving no survivors inside.`,
+    `Only scorched beams remain where <@${victimId}>'s home once stood. Their body is recovered from the ashes.`,
+    `The village wakes to a roaring fire that has already done its work — <@${victimId}> burned with their home.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function arsonistFireAwayDeathLine(victimId: string): string {
+  const variants = [
+    `<@${victimId}> is found near the smoldering remains of their home, the shock of the blaze written on their face.`,
+    `By dawn, <@${victimId}>'s house is a blackened shell — and <@${victimId}> lies dead nearby, never having recovered from the night.`,
+    `The village wakes to the smell of ash. <@${victimId}>'s home is gone, and so is <@${victimId}> — the disaster broke more than just wood and stone.`,
   ];
   return pickRandom(variants);
 }
