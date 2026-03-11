@@ -59,11 +59,17 @@ function getWolfCount(playerCount: number): number {
  */
 function shouldIncludeNeutral(playerCount: number): boolean {
   if (playerCount < 8) return false;
-  const chance = playerCount >= 14 ? 0.7 : playerCount >= 11 ? 0.5 : 0.3;
+  const chance = playerCount >= 14 ? 0.9 : playerCount >= 11 ? 0.7 : 0.5;
   return Math.random() < chance;
 }
 
+/**
+ * Wolf pack composition rules:
+ *   1 wolf  → always plain werewolf (alpha/cub are too volatile solo)
+ *   2+ wolves → random mix from the full pack
+ */
 function pickWolves(count: number): RoleName[] {
+  if (count === 1) return ['werewolf'];
   const pool = shuffle(WOLF_PACK);
   const picked: RoleName[] = [];
   for (let i = 0; i < count; i += 1) {
@@ -136,10 +142,13 @@ function attemptSetup(playerCount: number): RoleName[] | null {
   const roles: RoleName[] = [];
 
   // Wolf pack — random mix of werewolf / wolf_cub / alpha_wolf.
-  roles.push(...pickWolves(wolfCount));
+  const wolves = pickWolves(wolfCount);
+  roles.push(...wolves);
 
-  // Sorcerer added when the pack is large enough to need intel support.
-  if (wolfCount >= 2 && isEligible('sorcerer', playerCount)) {
+  // Sorcerer: guaranteed at 3+ wolves, 60% chance at exactly 2.
+  if (wolfCount >= 3 && isEligible('sorcerer', playerCount)) {
+    roles.push('sorcerer');
+  } else if (wolfCount === 2 && isEligible('sorcerer', playerCount) && Math.random() < 0.6) {
     roles.push('sorcerer');
   }
 
@@ -156,7 +165,8 @@ function attemptSetup(playerCount: number): RoleName[] | null {
   // Stage 2: town power roles funded by the opposition budget.
   // Reserve at least 1 slot for a plain villager so the village core is
   // always represented.
-  const budget = wolfCount * 2.0 + 1.0 + (neutralAdded ? 1.5 : 0);
+  const alphaBonus = wolves.includes('alpha_wolf') ? 0.75 : 0;
+  const budget = wolfCount * 2.0 + 1.0 + (neutralAdded ? 1.5 : 0) + alphaBonus;
   const powerRoles = pickTownPowerRoles(budget, playerCount, playerCount - roles.length - 1);
   roles.push(...powerRoles);
 
