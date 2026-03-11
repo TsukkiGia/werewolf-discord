@@ -66,6 +66,15 @@ CREATE TABLE IF NOT EXISTS day_votes (
   UNIQUE (game_id, day, voter_id)
 );
 
+CREATE TABLE IF NOT EXISTS day_vote_prompts (
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  day INTEGER NOT NULL,
+  user_id TEXT NOT NULL,
+  channel_id TEXT NOT NULL,
+  message_id TEXT NOT NULL,
+  PRIMARY KEY (game_id, day, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS hunter_shots (
   id SERIAL PRIMARY KEY,
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,

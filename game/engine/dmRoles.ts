@@ -6,8 +6,9 @@ import type { AssignedRole } from '../types.js';
 import type { GameRow } from '../../db/games.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
-import { DiscordRequest, openDmChannel, postChannelMessage } from '../../utils.js';
+import { DiscordRequest, openDmChannel, postChannelMessage, patchChannelMessage } from '../../utils.js';
 import { recordNightActionPrompt } from '../../db/nightActions.js';
+import { recordDayVotePrompt, getDayVotePrompts } from '../../db/dayVotePrompts.js';
 import { logEvent } from '../../logging.js';
 
 // Cache display names per user ID for the lifetime of the process so we don't
@@ -247,7 +248,7 @@ export async function dmDayVotePrompts(params: {
         continue;
       }
 
-      await postChannelMessage(dmChannelId, {
+      const msgRes = await postChannelMessage(dmChannelId, {
         flags: InteractionResponseFlags.IS_COMPONENTS_V2,
         components: [
           {
@@ -270,6 +271,17 @@ export async function dmDayVotePrompts(params: {
           },
         ],
       });
+
+      const msg = (await msgRes.json()) as { id?: string };
+      if (msg.id && game.current_day) {
+        await recordDayVotePrompt({
+          gameId: game.id,
+          day: game.current_day,
+          userId: player.user_id,
+          channelId: dmChannelId,
+          messageId: msg.id,
+        });
+      }
     } catch (err) {
       console.error('Failed to DM day vote prompt to user', player.user_id, err);
       logEvent('day_vote_dm_error', {
@@ -280,6 +292,31 @@ export async function dmDayVotePrompts(params: {
       });
     }
   }
+}
+
+/**
+ * Edit all day-vote DM messages for the given day to replace the select
+ * menu with a "Voting has ended" notice, so stale prompts can't be used.
+ */
+export async function disableDayVotePrompts(gameId: string, day: number): Promise<void> {
+  const prompts = await getDayVotePrompts(gameId, day);
+  await Promise.all(
+    prompts.map(async (p) => {
+      try {
+        await patchChannelMessage(p.channel_id, p.message_id, {
+          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+          components: [
+            {
+              type: MessageComponentTypes.TEXT_DISPLAY,
+              content: 'Voting has ended.',
+            },
+          ],
+        });
+      } catch (err) {
+        console.error('Failed to disable day vote prompt', p.user_id, err);
+      }
+    }),
+  );
 }
 
 export async function startDayVoting(params: {

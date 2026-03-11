@@ -21,7 +21,7 @@ import {
   buildNightFallsLine,
   buildNoLynchLine,
 } from './status.js';
-import { dmNightActionsForAlivePlayers } from './dmRoles.js';
+import { dmNightActionsForAlivePlayers, disableDayVotePrompts } from './dmRoles.js';
 import { triggerHunterShot } from './hunterShot.js';
 import { scheduleDayVoting } from '../../jobs/dayVoting.js';
 import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
@@ -198,6 +198,11 @@ export async function maybeResolveDay(
     // If another concurrent call already claimed it, bail out.
     const claimed = await advancePhase(gameId, 'day');
     if (!claimed) return;
+
+    // Disable stale vote DMs so players can't vote after the phase ends.
+    disableDayVotePrompts(gameId, dayNumber).catch((err) =>
+      console.error('Failed to disable day vote prompts', err),
+    );
 
     if (resolution.state === 'no_lynch') {
       if (game.channel_id) {

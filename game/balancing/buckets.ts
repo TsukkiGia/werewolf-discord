@@ -43,7 +43,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   {
     id: 'village_power_protect',
     roles: ['doctor'],
-    slotCountForPlayers: (playerCount) => (playerCount >= 5 ? 1 : 0),
+    slotCountForPlayers: (playerCount) => (playerCount >= 3 ? 1 : 0),
   },
   {
     id: 'village_power_reactive',
