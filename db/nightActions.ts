@@ -1,7 +1,7 @@
 import { pool } from './client.js';
 import type { NightActionKind, RoleName } from '../game/types.js';
 import type { GamePlayerState } from './players.js';
-import { DiscordRequest, openDmChannel, postChannelMessage } from '../utils.js';
+import { openDmChannel, postChannelMessage } from '../utils.js';
 
 export interface NightActionRow {
   id: number;

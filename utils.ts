@@ -21,9 +21,16 @@ export interface SlashCommand {
   options?: SlashCommandOption[];
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export async function DiscordRequest(
   endpoint: string,
   options: DiscordRequestOptions,
+  retryCount = 0,
 ): Promise<Response> {
   // append endpoint to root API URL
   const url = 'https://discord.com/api/v10/' + endpoint;
@@ -41,6 +48,26 @@ export async function DiscordRequest(
 
   // Use fetch to make requests
   const res = await fetch(url, init);
+
+  // Handle Discord rate limits with basic retry & backoff.
+  if (res.status === 429) {
+    let data: any = null;
+    try {
+      data = await res.json();
+    } catch {
+      // ignore JSON parsing errors; we'll fall back to a default delay
+    }
+    const retryAfterSeconds =
+      data && typeof data.retry_after === 'number' ? data.retry_after : 1;
+
+    if (retryCount < 3) {
+      await sleep(retryAfterSeconds * 1000);
+      return DiscordRequest(endpoint, options, retryCount + 1);
+    }
+
+    throw new Error(JSON.stringify(data ?? { message: 'Rate limited' }));
+  }
+
   // throw API errors
   if (!res.ok) {
     const data = await res.json();

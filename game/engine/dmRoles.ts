@@ -61,85 +61,79 @@ export async function dmRolesAndNightActions(params: {
 }): Promise<void> {
   const { game, playerIds, assignments, nightNumber } = params;
 
-  await Promise.all(
-    assignments.map(async (assignment) => {
-      try {
-        const dmChannelId = await openDmChannel(assignment.userId);
+  for (const assignment of assignments) {
+    try {
+      const dmChannelId = await openDmChannel(assignment.userId);
 
-        const def = ROLE_REGISTRY[assignment.role];
-        const roleLine = def.dmIntro;
+      const def = ROLE_REGISTRY[assignment.role];
+      const roleLine = def.dmIntro;
 
-        const baseContent = `Your role for this Werewolf game is: **${assignment.role}**.\n${roleLine}`;
+      const baseContent = `Your role for this Werewolf game is: **${assignment.role}**.\n${roleLine}`;
 
-        const components: any[] = [];
+      const components: any[] = [];
 
-        const hasNightAction =
-          def.nightAction.target === 'player' && def.nightAction.kind !== 'none';
+      const hasNightAction =
+        def.nightAction.target === 'player' && def.nightAction.kind !== 'none';
 
-        if (hasNightAction) {
-          const options = await Promise.all(
-            playerIds
-              .filter((id: string) =>
-                def.nightAction.canTargetSelf ? true : id !== assignment.userId,
-              )
-              .map(async (id: string) => ({
-                label: await getDisplayName(id, game.guild_id),
-                value: id,
-              })),
-          );
-
-          if (options.length > 0) {
-            components.push({
-              type: MessageComponentTypes.ACTION_ROW,
-              components: [
-                {
-                  type: MessageComponentTypes.STRING_SELECT,
-                  custom_id: `night_action:${game.id}:${assignment.role}`,
-                  placeholder: 'Choose your night target',
-                  min_values: 1,
-                  max_values: 1,
-                  options,
-                },
-              ],
-            });
-          }
+      if (hasNightAction) {
+        const options = [];
+        for (const id of playerIds) {
+          if (!def.nightAction.canTargetSelf && id === assignment.userId) continue;
+          const label = await getDisplayName(id, game.guild_id);
+          options.push({ label, value: id });
         }
 
-        if (components.length && hasNightAction) {
-          const msgRes = await postChannelMessage(dmChannelId, {
-            // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
-            // not the legacy `content` field.
-            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        if (options.length > 0) {
+          components.push({
+            type: MessageComponentTypes.ACTION_ROW,
             components: [
               {
-                type: MessageComponentTypes.TEXT_DISPLAY,
-                content: baseContent,
+                type: MessageComponentTypes.STRING_SELECT,
+                custom_id: `night_action:${game.id}:${assignment.role}`,
+                placeholder: 'Choose your night target',
+                min_values: 1,
+                max_values: 1,
+                options,
               },
-              ...components,
             ],
           });
+        }
+      }
 
-          const msg = (await msgRes.json()) as { id?: string };
-          if (msg.id) {
-            await recordNightActionPrompt({
-              gameId: game.id,
-              night: nightNumber,
-              userId: assignment.userId,
-              channelId: dmChannelId,
-              messageId: msg.id,
-            });
-          }
-        } else {
-          await postChannelMessage(dmChannelId, {
-            // No components v2 here, so plain content is fine.
-            content: baseContent,
+      if (components.length && hasNightAction) {
+        const msgRes = await postChannelMessage(dmChannelId, {
+          // With IS_COMPONENTS_V2, text must be inside TEXT_DISPLAY,
+          // not the legacy `content` field.
+          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+          components: [
+            {
+              type: MessageComponentTypes.TEXT_DISPLAY,
+              content: baseContent,
+            },
+            ...components,
+          ],
+        });
+
+        const msg = (await msgRes.json()) as { id?: string };
+        if (msg.id) {
+          await recordNightActionPrompt({
+            gameId: game.id,
+            night: nightNumber,
+            userId: assignment.userId,
+            channelId: dmChannelId,
+            messageId: msg.id,
           });
         }
-      } catch (err) {
-        console.error('Failed to DM role to user', assignment.userId, err);
+      } else {
+        await postChannelMessage(dmChannelId, {
+          // No components v2 here, so plain content is fine.
+          content: baseContent,
+        });
       }
-    }),
-  );
+    } catch (err) {
+      console.error('Failed to DM role to user', assignment.userId, err);
+    }
+  }
 }
 
 /**
@@ -188,61 +182,50 @@ export async function dmDayVotePrompts(params: {
   const alivePlayers = players.filter((p) => p.is_alive);
   const aliveIds = alivePlayers.map((p) => p.user_id);
 
-  await Promise.all(
-    alivePlayers.map(async (player) => {
-      try {
-        const dmRes = await DiscordRequest('users/@me/channels', {
-          method: 'POST',
-          body: { recipient_id: player.user_id },
-        });
-        const dmChannel = (await dmRes.json()) as { id: string };
+  for (const player of alivePlayers) {
+    try {
+      const dmChannelId = await openDmChannel(player.user_id);
 
-        const options = await Promise.all(
-          aliveIds
-            // Typically you can't vote if you're dead; here only alive players are listed.
-            // We also exclude self from the target list to avoid accidental self-votes.
-            .filter((id) => id !== player.user_id)
-            .map(async (id) => ({
-              label: await getDisplayName(id, game.guild_id),
-              value: id,
-            })),
-        );
+      const options = [];
+      for (const id of aliveIds) {
+        // Typically you can't vote if you're dead; here only alive players are listed.
+        // We also exclude self from the target list to avoid accidental self-votes.
+        if (id === player.user_id) continue;
+        const label = await getDisplayName(id, game.guild_id);
+        options.push({ label, value: id });
+      }
 
-        if (options.length === 0) {
-          return;
-        }
+      if (options.length === 0) {
+        continue;
+      }
 
-        await DiscordRequest(`channels/${dmChannel.id}/messages`, {
-          method: 'POST',
-          body: {
-            flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+      await postChannelMessage(dmChannelId, {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: [
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content:
+              'It is day. Choose a player to lynch from the list below.',
+          },
+          {
+            type: MessageComponentTypes.ACTION_ROW,
             components: [
               {
-                type: MessageComponentTypes.TEXT_DISPLAY,
-                content:
-                  'It is day. Choose a player to lynch from the list below.',
-              },
-              {
-                type: MessageComponentTypes.ACTION_ROW,
-                components: [
-                  {
-                    type: MessageComponentTypes.STRING_SELECT,
-                    custom_id: `day_vote:${game.id}`,
-                    placeholder: 'Choose a player to lynch',
-                    min_values: 1,
-                    max_values: 1,
-                    options,
-                  },
-                ],
+                type: MessageComponentTypes.STRING_SELECT,
+                custom_id: `day_vote:${game.id}`,
+                placeholder: 'Choose a player to lynch',
+                min_values: 1,
+                max_values: 1,
+                options,
               },
             ],
           },
-        });
-      } catch (err) {
-        console.error('Failed to DM day vote prompt to user', player.user_id, err);
-      }
-    }),
-  );
+        ],
+      });
+    } catch (err) {
+      console.error('Failed to DM day vote prompt to user', player.user_id, err);
+    }
+  }
 }
 
 export async function startDayVoting(params: {
