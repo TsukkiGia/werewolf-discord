@@ -80,6 +80,15 @@ export function doctorSavedRumorLine(): string {
   return pickRandom(variants);
 }
 
+export function doctorSavedTargetLine(): string {
+  const variants = [
+    'You wake sore and shaken, with flashes of claws and teeth — and a pair of steady hands dragging you back from the brink. The wolves came for you, but the doctor saved your life.',
+    'Your last memory of the night is fur, fangs, and sudden pain — then bandages and whispered instructions. Someone, somewhere, patched you up. The wolves tried to kill you, but the doctor stood between you and the grave.',
+    'You should not be alive. The wolves tore into you last night, but a doctor worked through the dark to pull you back from death.',
+  ];
+  return pickRandom(variants);
+}
+
 export function hunterResolveLine(): string {
   const variants = [
     "The Hunter's eyes flash with resolve...",
@@ -202,6 +211,15 @@ export function wolfTargetNotHomeLine(targetId: string): string {
   return pickRandom(variants);
 }
 
+export function wolfBlockedByDoctorLine(targetId: string): string {
+  const variants = [
+    `You slipped into <@${targetId}>'s home hungry for blood — but a doctor barred your path. Your kill was stopped.`,
+    `You lunged for <@${targetId}>, only to meet steel and medicine instead of flesh. The doctor turned your attack aside.`,
+    `Claws flashed, fangs bared — and then a doctor dragged <@${targetId}> out of your reach. Tonight, your hunt was broken by a healer.`,
+  ];
+  return pickRandom(variants);
+}
+
 export function wolfMissedYouAwayLine(): string {
   const variants = [
     'In the morning, you hear hushed voices: the wolves clawed at your door last night, but found only an empty house. Being out may have saved your life.',
@@ -216,6 +234,15 @@ export function wolfKillDmLine(): string {
     'In the dead of night, the wolves found you. Teeth flashed, claws tore, and your story ended in the dark.',
     'You remember the sound of paws in the grass, a growl in the dark, and then nothing. The wolves devoured you in the night.',
     'The last thing you felt was hot breath at your throat and the crush of fangs. The wolves feasted — and you were the meal.',
+  ];
+  return pickRandom(variants);
+}
+
+export function wolfCubDeathPackLine(cubId: string): string {
+  const variants = [
+    `A young howl goes silent. The Wolf Cub <@${cubId}> has fallen, and the pack feels the loss like a wound.`,
+    `News spreads through the shadows: the Wolf Cub <@${cubId}> is dead. Grief twists quickly into rage among the pack.`,
+    `Somewhere in the dark, a small, familiar presence vanishes. The Wolf Cub <@${cubId}> will hunt no more.`,
   ];
   return pickRandom(variants);
 }

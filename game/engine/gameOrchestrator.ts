@@ -11,6 +11,7 @@ import {
 } from '../../db.js';
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
+import { WOLF_PACK_ROLES, type RoleName } from '../types.js';
 import {
   processSeerActions,
   processDoctorActions,
@@ -45,6 +46,8 @@ import {
   nightVictimLine,
   wolfTargetNotHomeLine,
   wolfMissedYouAwayLine,
+  wolfBlockedByDoctorLine,
+  doctorSavedTargetLine,
   doctorProtectingWolfDeathLine,
   harlotVisitWolfDeathLine,
   harlotVisitWolfVictimDeathLine,
@@ -55,6 +58,7 @@ import {
   arsonistIgniteLine,
   deathSummary,
   wolfKillDmLine,
+  wolfCubDeathPackLine,
 } from '../strings/narration.js';
 
 type NightDeathCause =
@@ -147,6 +151,33 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       protectTargets,
       visitActions,
     });
+
+    // If the Wolf Cub died tonight, DM surviving pack members.
+    const wolfCubDeath = nightDeaths.find((d) => {
+      const victim = updatedPlayers.find((p) => p.user_id === d.playerId);
+      return victim?.role === 'wolf_cub';
+    });
+    if (wolfCubDeath) {
+      const cubId = wolfCubDeath.playerId;
+      const packMates = updatedPlayers.filter(
+        (p) =>
+          p.is_alive &&
+          WOLF_PACK_ROLES.has(p.role as RoleName) &&
+          p.user_id !== cubId,
+      );
+      await Promise.all(
+        packMates.map(async (wolf) => {
+          try {
+            const dmChannelId = await openDmChannel(wolf.user_id);
+            await postChannelMessage(dmChannelId, {
+              content: wolfCubDeathPackLine(cubId),
+            });
+          } catch (err) {
+            console.error('Failed to DM wolf pack about Wolf Cub death', gameId, wolf.user_id, err);
+          }
+        }),
+      );
+    }
 
     // --- 8. Hunter reactive shot (if the hunter was killed tonight) ---
     const killedHunter = killedIds.length > 0
@@ -407,11 +438,36 @@ async function resolveNightActionsAndCollectDeaths(params: {
     // Let the intended victim know the wolves came while they were out.
     try {
       const dmChannelId = await openDmChannel(victimId);
-      await postChannelMessage(dmChannelId, {
-        content: wolfMissedYouAwayLine(),
-      });
+      await postChannelMessage(dmChannelId, { content: wolfMissedYouAwayLine() });
     } catch (err) {
       console.error('Failed to DM away-target wolf miss result', err);
+    }
+  } else if (victimId && protectedSet.has(victimId)) {
+    // Wolves chose a victim who was at home, but the doctor blocked the kill.
+    const killActors = actions.filter(
+      (a) => a.action_kind === 'kill' && a.target_id === victimId,
+    );
+    await Promise.all(
+      killActors.map(async (a) => {
+        try {
+          const dmChannelId = await openDmChannel(a.actor_id);
+          await postChannelMessage(dmChannelId, {
+            content: wolfBlockedByDoctorLine(victimId),
+          });
+        } catch (err) {
+          console.error('Failed to DM wolf doctor-block result', err);
+        }
+      }),
+    );
+
+    // Let the saved victim know they were attacked but survived thanks to the doctor.
+    try {
+      const dmChannelId = await openDmChannel(victimId);
+      await postChannelMessage(dmChannelId, {
+        content: doctorSavedTargetLine(),
+      });
+    } catch (err) {
+      console.error('Failed to DM doctor-saved target result', err);
     }
   }
 
@@ -577,6 +633,28 @@ export async function maybeResolveDay(
 
     await markPlayerDead(gameId, lynchId);
     const updatedPlayers = await getPlayersForGame(gameId);
+
+    // If the Wolf Cub was lynched, DM surviving pack members.
+    if (lynched.role === 'wolf_cub') {
+      const packMates = updatedPlayers.filter(
+        (p) =>
+          p.is_alive &&
+          WOLF_PACK_ROLES.has(p.role as RoleName) &&
+          p.user_id !== lynchId,
+      );
+      await Promise.all(
+        packMates.map(async (wolf) => {
+          try {
+            const dmChannelId = await openDmChannel(wolf.user_id);
+            await postChannelMessage(dmChannelId, {
+              content: wolfCubDeathPackLine(lynchId),
+            });
+          } catch (err) {
+            console.error('Failed to DM wolf pack about Wolf Cub lynch', gameId, wolf.user_id, err);
+          }
+        }),
+      );
+    }
 
     // --- 4. Hunter reactive shot (if the hunter was lynched) ---
     if (lynched.role === 'hunter') {

@@ -38,7 +38,7 @@ export async function triggerHunterShot(params: {
         {
           type: MessageComponentTypes.TEXT_DISPLAY,
           content:
-            'You have been eliminated! As the Hunter, you may choose one player to shoot. Select a target below, or let the timer expire to forgo your shot.',
+            'You have been eliminated — but as the Hunter, you still have one last shot. Choose a player to take down with you, or let the timer run out to die in silence.',
         },
         {
           type: MessageComponentTypes.ACTION_ROW,
