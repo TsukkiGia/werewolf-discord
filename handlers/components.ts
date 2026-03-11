@@ -12,7 +12,7 @@ import {
   hasNightAction,
   hasDayVote,
 } from '../db.js';
-import { postChannelMessage } from '../utils.js';
+import { postChannelMessage, sendDmMessage } from '../utils.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
 import { getInteractionUserId } from '../interactionHelpers.js';
 import { maybeResolveNight, maybeResolveDay } from '../game/engine/gameOrchestrator.js';
@@ -150,6 +150,32 @@ export async function handleNightAction(req: any, res: any, componentId: string)
       ],
     },
   });
+
+  // If a werewolf submits a kill target, notify the other wolves in DMs.
+  if (def.name === 'werewolf' && def.nightAction.kind === 'kill' && targetId) {
+    void (async () => {
+      try {
+        const players = await getPlayersForGame(gameId);
+        const otherWolves = players.filter(
+          (p) => p.is_alive && p.user_id !== actorId && p.role === 'werewolf',
+        );
+
+        if (otherWolves.length === 0) return;
+
+        const content = `Wolf vote: <@${actorId}> has chosen to attack <@${targetId}> tonight.`;
+
+        await Promise.all(
+          otherWolves.map((p) =>
+            sendDmMessage(p.user_id, {
+              content,
+            }),
+          ),
+        );
+      } catch (err) {
+        console.error('Failed to DM wolf vote to pack members', gameId, actorId, err);
+      }
+    })();
+  }
 
   void maybeResolveNight(gameId);
 }

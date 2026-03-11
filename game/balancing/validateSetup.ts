@@ -1,8 +1,10 @@
 import type { RoleName } from '../types.js';
-import { ROLE_REGISTRY } from './roleRegistry.js';
+import { BUCKET_CONFIGS } from './buckets.js';
 
 export function validateSetup(roles: RoleName[]): boolean {
-  const wolfCount = roles.filter((r) => ROLE_REGISTRY[r].alignment === 'wolf').length;
+  const wolfCoreCfg = BUCKET_CONFIGS.find((b) => b.id === 'wolf_core');
+  const wolfCoreRoles = new Set< RoleName >(wolfCoreCfg ? wolfCoreCfg.roles : []);
+  const wolfCount = roles.filter((r) => wolfCoreRoles.has(r)).length;
 
   if (roles.length >= 3 && wolfCount < 1) {
     return false;

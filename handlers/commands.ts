@@ -232,29 +232,36 @@ export async function handleWwStart(req: any, res: any): Promise<any> {
     });
   }
 
-  const assignments = await assignRolesForGame(game.id);
-  const playersForTargets = await getPlayersForGame(game.id);
-  const aliveTargetIds = playersForTargets.filter((p) => p.is_alive).map((p) => p.user_id);
-
-  // Night 1: first DM roles, then DM night actions.
-  await dmRolesForAssignments({ game, assignments });
-  await dmNightActionsForAlivePlayers({ game, players: playersForTargets });
-  await scheduleNightTimeout(game.id, 1); // startGame increments current_night 0 → 1
-
   const playersText =
     playerIds.length > 0
       ? playerIds.map((id: string) => `<@${id}>`).join(', ')
       : 'No players (this should not happen).';
 
-  if (game.channel_id) {
+  // Run the heavy Discord + DM work asynchronously so we can respond
+  // to the interaction within Discord's 3-second limit.
+  void (async () => {
     try {
-      await postChannelMessage(game.channel_id, {
-        content: `The Werewolf game has started!\nHost: <@${game.host_id}>\nPlayers: ${playersText}`,
-      });
+      const assignments = await assignRolesForGame(game.id);
+      const playersForTargets = await getPlayersForGame(game.id);
+
+      // Night 1: first DM roles, then DM night actions.
+      await dmRolesForAssignments({ game, assignments });
+      await dmNightActionsForAlivePlayers({ game, players: playersForTargets });
+      await scheduleNightTimeout(game.id, 1); // startGame increments current_night 0 → 1
+
+      if (game.channel_id) {
+        try {
+          await postChannelMessage(game.channel_id, {
+            content: `The Werewolf game has started!\nHost: <@${game.host_id}>\nPlayers: ${playersText}`,
+          });
+        } catch (err) {
+          console.error('Failed to send game started message', err);
+        }
+      }
     } catch (err) {
-      console.error('Failed to send game started message', err);
+      console.error('Error running start-game side effects', game.id, err);
     }
-  }
+  })();
 
   return res.send({
     type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,

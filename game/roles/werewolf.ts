@@ -9,7 +9,21 @@ export const WerewolfRole: RoleDefinition = {
     target: 'player',
     canTargetSelf: false,
   },
-  buildRoleIntro: ({ assignment }: RoleIntroContext): string =>
-    `Your role for this Werewolf game is: **${assignment.role}**.\n` +
-    'You are a WEREWOLF. Your goal is to eliminate the villagers without being discovered.',
+  buildRoleIntro: ({ assignment, allAssignments }: RoleIntroContext): string => {
+    const base =
+      'Your role for this Werewolf game is: **werewolf**.\n' +
+      'You are a WEREWOLF. Your goal is to eliminate the villagers without being discovered.';
+
+    const wolfIds = allAssignments
+      .filter((a) => a.role === 'werewolf')
+      .map((a) => a.userId);
+
+    const others = wolfIds.filter((id) => id !== assignment.userId);
+    if (others.length === 0) {
+      return `${base}\nYou are currently the only werewolf in this game.`;
+    }
+
+    const mentions = others.map((id) => `<@${id}>`).join(', ');
+    return `${base}\nThe other werewolves in this game are: ${mentions}.`;
+  },
 };

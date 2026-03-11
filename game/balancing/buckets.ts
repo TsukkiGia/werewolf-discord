@@ -24,10 +24,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
     id: 'wolf_core',
     roles: ['werewolf'],
     slotCountForPlayers: (playerCount) => {
-      if (playerCount <= 1) return 0;
-      if (playerCount <= 6) return 1;
-      if (playerCount <= 9) return 2;
-      return 3;
+      return Math.ceil(playerCount / 5) ;
     },
   },
   {

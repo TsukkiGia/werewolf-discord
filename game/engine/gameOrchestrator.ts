@@ -79,9 +79,11 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       } else {
         lines.push('Dawn breaks.');
         lines.push(
-          ...victims.map(
-            (v) => `<@${v.user_id}> was eliminated during the night. They were a **${v.role}**.`,
-          ),
+          ...victims.map((v) => {
+            const wasWolf = v.alignment === 'wolf';
+            const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
+            return `<@${v.user_id}> was eliminated during the night. They were ${roleSummary}.`;
+          }),
         );
       }
 
@@ -154,8 +156,10 @@ export async function maybeResolveDay(gameId: string): Promise<void> {
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
+      const wasWolf = lynched.alignment === 'wolf';
+      const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
       const lines: string[] = [
-        `Day vote results: <@${lynchId}> was lynched. They were a **${lynched.role}**.`,
+        `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
       ];
 
       if (win) {
