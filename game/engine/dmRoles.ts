@@ -53,7 +53,7 @@ async function getDisplayName(userId: string, guildId: string | null): Promise<s
   return promise;
 }
 
-export async function dmRolesAndNightActions(params: {
+async function dmNightPromptsCore(params: {
   game: GameRow;
   playerIds: string[];
   assignments: AssignedRole[];
@@ -68,7 +68,7 @@ export async function dmRolesAndNightActions(params: {
       const def = ROLE_REGISTRY[assignment.role];
       const roleLine = def.dmIntro;
 
-      const baseContent = `Your role for this Werewolf game is: **${assignment.role}**.\n${roleLine}`;
+      const baseContent = `Night ${nightNumber}: choose your night target.`;
 
       const components: any[] = [];
 
@@ -137,6 +137,32 @@ export async function dmRolesAndNightActions(params: {
 }
 
 /**
+ * DM each player's role intro once at the start of the game.
+ * This does not include any night-action components; those are
+ * handled separately by dmNightActionsForAlivePlayers.
+ */
+export async function dmRolesForAssignments(params: {
+  game: GameRow;
+  assignments: AssignedRole[];
+}): Promise<void> {
+  const { game, assignments } = params;
+
+  for (const assignment of assignments) {
+    try {
+      const dmChannelId = await openDmChannel(assignment.userId);
+      const def = ROLE_REGISTRY[assignment.role];
+      const baseContent = `Your role for this Werewolf game is: **${assignment.role}**.\n${def.dmIntro}`;
+
+      await postChannelMessage(dmChannelId, {
+        content: baseContent,
+      });
+    } catch (err) {
+      console.error('Failed to DM role to user', assignment.userId, err);
+    }
+  }
+}
+
+/**
  * DM night-action prompts to all alive players who actually have
  * a night action (werewolves, seer, doctor, etc.) using the current
  * game state from the database.
@@ -170,7 +196,12 @@ export async function dmNightActionsForAlivePlayers(params: {
   if (assignments.length === 0) return;
 
   const nightNumber = game.current_night || 1;
-  await dmRolesAndNightActions({ game, playerIds: targetIds, assignments, nightNumber });
+  await dmNightPromptsCore({
+    game,
+    playerIds: targetIds,
+    assignments,
+    nightNumber,
+  });
 }
 
 export async function dmDayVotePrompts(params: {

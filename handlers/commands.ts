@@ -15,8 +15,8 @@ import {
   endGame,
   setJoinMessageId,
 } from '../db.js';
-import { DiscordRequest, patchChannelMessage, postChannelMessage } from '../utils.js';
-import { dmRolesAndNightActions } from '../game/engine/dmRoles.js';
+import { patchChannelMessage, postChannelMessage } from '../utils.js';
+import { dmRolesForAssignments, dmNightActionsForAlivePlayers } from '../game/engine/dmRoles.js';
 import { scheduleNightTimeout } from '../jobs/nightTimeout.js';
 import { buildStatusLines } from '../game/engine/status.js';
 import { getInteractionUserId, getGuildAndChannelIds } from '../interactionHelpers.js';
@@ -150,8 +150,8 @@ export async function handleWwHelp(_req: any, res: any): Promise<any> {
     '2. Host runs `/ww_start` to assign roles and start Night 1.',
     '3. Everyone receives a DM with their role. Roles with night actions (werewolf, seer, doctor) also get a DM menu to choose a target.',
     '4. When all required night actions are submitted, night resolves automatically.',
-    '5. At dawn, the bot announces any deaths, then gives the channel 1 minute to discuss.',
-    '6. After 1 minute, alive players receive a DM to vote on a lynch. Votes are announced in the channel and resolve automatically when there is a majority.',
+    '5. At dawn, the bot announces any deaths, then gives the channel 30 seconds to discuss.',
+    '6. After 30 seconds, alive players receive a DM to vote on a lynch. Votes are announced in the channel and resolve automatically when there is a majority.',
     '',
     'The game ends automatically when either all wolves are dead (town wins) or only wolves are left alive (wolves win).',
   ];
@@ -236,7 +236,9 @@ export async function handleWwStart(req: any, res: any): Promise<any> {
   const playersForTargets = await getPlayersForGame(game.id);
   const aliveTargetIds = playersForTargets.filter((p) => p.is_alive).map((p) => p.user_id);
 
-  await dmRolesAndNightActions({ game, playerIds: aliveTargetIds, assignments, nightNumber: 1 });
+  // Night 1: first DM roles, then DM night actions.
+  await dmRolesForAssignments({ game, assignments });
+  await dmNightActionsForAlivePlayers({ game, players: playersForTargets });
   await scheduleNightTimeout(game.id, 1); // startGame increments current_night 0 → 1
 
   const playersText =
