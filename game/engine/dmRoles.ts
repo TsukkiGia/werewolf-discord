@@ -8,6 +8,7 @@ import type { GamePlayerState } from '../../db/players.js';
 import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
 import { DiscordRequest, openDmChannel, postChannelMessage } from '../../utils.js';
 import { recordNightActionPrompt } from '../../db/nightActions.js';
+import { logEvent } from '../../logging.js';
 
 // Cache display names per user ID for the lifetime of the process so we don't
 // spam the Discord API (and hit rate limits) when building option lists.
@@ -221,7 +222,11 @@ export async function dmDayVotePrompts(params: {
 
   for (const player of alivePlayers) {
     try {
-      console.log('Sending day-vote DM to', player.user_id);
+      logEvent('day_vote_dm_send', {
+        gameId: game.id,
+        day: game.current_day ?? null,
+        userId: player.user_id,
+      });
       const dmChannelId = await openDmChannel(player.user_id);
 
       const options = [];
@@ -262,6 +267,12 @@ export async function dmDayVotePrompts(params: {
       });
     } catch (err) {
       console.error('Failed to DM day vote prompt to user', player.user_id, err);
+      logEvent('day_vote_dm_error', {
+        gameId: game.id,
+        day: game.current_day ?? null,
+        userId: player.user_id,
+        error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 }

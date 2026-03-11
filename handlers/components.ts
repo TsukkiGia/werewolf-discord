@@ -17,6 +17,7 @@ import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
 import { getInteractionUserId } from '../interactionHelpers.js';
 import { maybeResolveNight, maybeResolveDay } from '../game/engine/gameOrchestrator.js';
 import { buildJoinClosedComponents } from './commands.js';
+import { logEvent } from '../logging.js';
 
 export async function handleJoinButton(req: any, res: any, componentId: string): Promise<any> {
   const gameId = componentId.replace('join_button_', '');
@@ -121,6 +122,15 @@ export async function handleNightAction(req: any, res: any, componentId: string)
         flags: InteractionResponseFlags.EPHEMERAL,
         content: 'You have already submitted your night action. It cannot be changed.',
       },
+    });
+  } else {
+    logEvent('night_action_record', {
+      gameId,
+      night: nightNumber,
+      actorId,
+      role: def.name,
+      actionKind: def.nightAction.kind,
+      targetId,
     });
   }
 
@@ -237,6 +247,13 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
     return res.send({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: { content: 'You have already voted today. Your vote cannot be changed.' },
+    });
+  } else {
+    logEvent('day_vote_record', {
+      gameId: game.id,
+      day: dayNumber,
+      voterId: actorId,
+      targetId,
     });
   }
 
