@@ -8,6 +8,7 @@ export const SeerRole: RoleDefinition = {
     kind: 'inspect',
     target: 'player',
     canTargetSelf: false,
+    prompt: 'Night {night}: choose a player to inspect.',
   },
   buildRoleIntro: ({ assignment }: RoleIntroContext): string =>
     `Your role for this Werewolf game is: **${assignment.role}**.\n` +

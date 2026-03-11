@@ -8,6 +8,7 @@ export const WerewolfRole: RoleDefinition = {
     kind: 'kill',
     target: 'player',
     canTargetSelf: false,
+    prompt: 'Night {night}: choose a player to attack.',
   },
   buildRoleIntro: ({ assignment, allAssignments }: RoleIntroContext): string => {
     const base =

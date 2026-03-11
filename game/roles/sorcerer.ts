@@ -9,9 +9,9 @@ export const SorcererRole: RoleDefinition = {
     kind: 'inspect',
     target: 'player',
     canTargetSelf: false,
+    prompt: 'Night {night}: choose a player to inspect for wolves or the seer.',
   },
   buildRoleIntro: ({ assignment }: RoleIntroContext): string =>
     `Your role for this Werewolf game is: **${assignment.role}**.\n` +
     'You are the SORCERER. Each night you may inspect a player to learn whether they are a wolf, the Seer, or neither. You win with the wolves.',
 };
-

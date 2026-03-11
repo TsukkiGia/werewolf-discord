@@ -8,6 +8,7 @@ export const DoctorRole: RoleDefinition = {
     kind: 'protect',
     target: 'player',
     canTargetSelf: true,
+    prompt: 'Night {night}: choose a player to protect.',
   },
   buildRoleIntro: ({ assignment }: RoleIntroContext): string =>
     `Your role for this Werewolf game is: **${assignment.role}**.\n` +
