@@ -53,6 +53,17 @@ export async function handleJoinButton(req: any, res: any, componentId: string):
     return res.status(400).json({ error: 'missing user id' });
   }
 
+  const existingPlayers = await getPlayersForGame(gameId);
+  if (existingPlayers.some((p) => p.user_id === userId)) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'You have already joined this game.',
+      },
+    });
+  }
+
   await addPlayer(gameId, userId);
 
   return res.send({

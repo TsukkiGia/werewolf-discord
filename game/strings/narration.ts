@@ -251,6 +251,15 @@ export function arsonistFireDeathLine(victimId: string): string {
   return pickRandom(variants);
 }
 
+export function arsonistIgniteLine(): string {
+  const variants = [
+    'In the dead of night, a dozen quiet flames become an inferno. Someone has set the village alight...',
+    'The night erupts in fire as multiple houses go up in flames. An arsonist has finally struck.',
+    'A chain of explosions and roaring flames tears through the village — all the doused houses ignite at once.',
+  ];
+  return pickRandom(variants);
+}
+
 export function finalRolesLines(players: GamePlayerState[]): string[] {
   const roleLines =
     players.length > 0

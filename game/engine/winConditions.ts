@@ -67,7 +67,7 @@ export function evaluateWinCondition(players: GamePlayerState[]): WinResult | nu
     return { winner: 'arsonist', wolves: wolfPlayers };
   }
 
-  if (wolvesAlive === 0 && wolfPlayers.length > 0) {
+  if (wolvesAlive === 0 && wolfPlayers.length > 0 && arsonistsAlive === 0) {
     return { winner: 'town', wolves: wolfPlayers };
   }
 

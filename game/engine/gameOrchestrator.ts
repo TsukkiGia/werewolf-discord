@@ -49,6 +49,7 @@ import {
   chemistSelfDeathLine,
   chemistTargetDeathLine,
   arsonistFireDeathLine,
+  arsonistIgniteLine,
   deathSummary,
 } from '../strings/narration.js';
 
@@ -301,6 +302,9 @@ function buildNightSummaryLines(
     }
   } else {
     lines.push(dawnIntroLine());
+    if (nightDeaths.some((d) => d.cause === 'arsonist_fire')) {
+      lines.push(arsonistIgniteLine());
+    }
     lines.push(...buildNightDeathLines(nightDeaths, players));
   }
 
