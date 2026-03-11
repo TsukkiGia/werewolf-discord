@@ -51,8 +51,14 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
     slotCountForPlayers: (playerCount) => (playerCount >= 6 ? 1 : 0),
   },
   {
+    id: 'village_mason',
+    roles: ['mason'],
+    // Masons always come in a pair; introduce them in medium+ games.
+    slotCountForPlayers: (playerCount) => (playerCount >= 8 ? 2 : 0),
+  },
+  {
     id: 'village_core',
-    roles: ['villager', 'mason'],
+    roles: ['villager'],
     slotCountForPlayers: (playerCount, currentCounts) => {
       const used =
         currentCounts.wolf_core +
@@ -60,6 +66,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
         currentCounts.village_power_protect +
         currentCounts.village_power_reactive +
         currentCounts.wolf_support +
+        currentCounts.village_mason +
         currentCounts.neutral;
       return Math.max(0, playerCount - used);
     },

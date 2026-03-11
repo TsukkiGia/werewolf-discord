@@ -11,20 +11,31 @@ function getRolesInBucket(bucket: RoleBucket): RoleName[] {
   return cfg ? cfg.roles : [];
 }
 
+/** Fisher-Yates shuffle — returns a new shuffled array, does not mutate. */
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
+
 /**
- * Pick `count` concrete roles from the given bucket. If the bucket
- * contains fewer distinct roles than `count`, the list simply wraps
- * around (e.g. [wolf, wolf, wolf] when only one wolf_core role exists).
+ * Pick `count` concrete roles from the given bucket using random sampling.
+ * The available roles are shuffled first so that unique-role buckets
+ * (e.g. wolf_core with werewolf/wolf_cub/alpha_wolf) pick a random subset
+ * rather than always the same ordered pair. If `count` exceeds the number
+ * of distinct roles in the bucket the shuffled list wraps around.
  */
 function pickFromBucket(bucket: RoleBucket, count: number): RoleName[] {
   const available = getRolesInBucket(bucket);
   if (count <= 0 || available.length === 0) return [];
 
+  const pool = shuffle(available);
   const picked: RoleName[] = [];
   for (let i = 0; i < count; i += 1) {
-    const index = i % available.length;
-    const role = available[index]!;
-    picked.push(role);
+    picked.push(pool[i % pool.length]!);
   }
   return picked;
 }
@@ -46,6 +57,7 @@ export function chooseSetup(playerCount: number): RoleName[] {
   // First, compute how many slots each bucket receives using BUCKET_CONFIGS.
   const bucketCounts: Record<RoleBucket, number> = {
     village_core: 0,
+    village_mason: 0,
     village_power_info: 0,
     village_power_protect: 0,
     village_power_reactive: 0,

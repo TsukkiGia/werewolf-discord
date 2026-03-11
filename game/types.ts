@@ -9,6 +9,7 @@ export type Alignment = 'wolf' | 'town';
 // constructing setups, independent of its exact name.
 export type RoleBucket =
   | 'village_core'
+  | 'village_mason'
   | 'village_power_info'
   | 'village_power_protect'
   | 'village_power_reactive'
