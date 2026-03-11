@@ -33,7 +33,7 @@ and stores game state in **PostgreSQL**.
 
 ## Prerequisites
 
-- **Node.js** 18+ (you’re currently using Node 22).
+- **Node.js** 18+
 - **npm**
 - **PostgreSQL** 16 (local or hosted).
   - For local development, you can use Docker, e.g.:
