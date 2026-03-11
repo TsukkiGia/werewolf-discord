@@ -30,6 +30,7 @@ A Discord bot that runs full games of **Werewolf / Mafia** using slash commands,
 | Fool | Town | Inspect — believes they are the Seer; each inspection returns a completely random role |
 | Doctor | Town | Protect — shields one player from night kill (can self-protect) |
 | Hunter | Town | None — shoots one player on elimination |
+| Cupid | Town | Link — at the start of the game, chooses two Lovers; if one dies, the other dies of sorrow; Lovers can share in each other’s win and can win together as the last two alive |
 | Mason | Town | None — masons know each other at game start |
 | Harlot | Town | Visit — dies if visiting a wolf or the wolf's target; escapes if wolves come for them |
 | Clumsy Guy | Town | None — 50% chance their day vote misfires to a random player |

@@ -125,6 +125,24 @@ export function arsonistWinLine(): string {
   return pickRandom(variants);
 }
 
+export function loversWinAloneLine(loverAId: string, loverBId: string): string {
+  const variants = [
+    `In the end, only two hearts are still beating. <@${loverAId}> and <@${loverBId}> stand alone together — the Lovers win the game.`,
+    `All factions fall silent but two. Bound by fate, <@${loverAId}> and <@${loverBId}> survive as the last pair alive. Love wins tonight.`,
+    `When the dust settles, only the Lovers remain: <@${loverAId}> and <@${loverBId}>. Every side lost — except theirs.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function loversAlsoWinLine(loverAId: string, loverBId: string): string {
+  const variants = [
+    `Quietly, a secondary victory blooms: the Lovers <@${loverAId}> and <@${loverBId}> survive together and share in the winning side’s glory.`,
+    `Love endures the carnage — <@${loverAId}> and <@${loverBId}> both live and claim victory alongside the winning team.`,
+    `Amid the cheers, two hearts celebrate their own pact: the Lovers <@${loverAId}> and <@${loverBId}> have also won together.`,
+  ];
+  return pickRandom(variants);
+}
+
 export function revealWolvesLine(wolfMentions: string): string {
   const variants = [
     `The werewolves were: ${wolfMentions}.`,
@@ -288,6 +306,16 @@ export function chemistTargetDeathLine(victimId: string): string {
     `<@${victimId}> is discovered dead, reeking of strange potions. Last night’s “tasting session” was clearly fatal.`,
     `At dawn, <@${victimId}> is found with blackened lips and shattered vials nearby — poisoned by a bad brew.`,
     `<@${victimId}> never woke up after sharing mysterious potions in the night. The smell of alchemy still hangs in the air.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function loverSorrowDeathLine(victimId: string, partnerId: string | undefined): string {
+  const partnerMention = partnerId ? `<@${partnerId}>` : 'their lost lover';
+  const variants = [
+    `<@${victimId}> could not bear life without ${partnerMention}. They died of a broken heart.`,
+    `Grief proves fatal: after ${partnerMention} fell, <@${victimId}> slipped away in sorrow.`,
+    `The village finds <@${victimId}> gone before dawn, a victim not of claws or fire but of heartbreak for ${partnerMention}.`,
   ];
   return pickRandom(variants);
 }

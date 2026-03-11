@@ -11,6 +11,7 @@ import {
   resolveHunterShotRecord,
   incrementWolfExtraKillsForNextNight,
   clearWolfExtraKillsForNextNight,
+  getLovers,
 } from '../../db.js';
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
@@ -27,6 +28,7 @@ import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
 import { evaluateDayResolution } from './dayResolution.js';
 import { evaluateWinCondition, buildWinLines } from './winConditions.js';
+import type { WinResult } from './winConditions.js';
 import {
   buildDayStartLine,
   buildNightFallsLine,
@@ -64,6 +66,9 @@ import {
   alphaWolfTurnedYouLine,
   alphaWolfTurnedPackLine,
   alphaWolfBiteChannelLine,
+   loversWinAloneLine,
+   loversAlsoWinLine,
+   loverSorrowDeathLine,
   wolfCubDeathPackLine,
 } from '../strings/narration.js';
 
@@ -75,7 +80,8 @@ type NightDeathCause =
   | 'chemist_self'
   | 'chemist_target'
   | 'arsonist_fire_home'
-  | 'arsonist_fire_away';
+  | 'arsonist_fire_away'
+  | 'lover_sorrow';
 
 interface NightDeathInfo {
   playerId: string;
@@ -98,6 +104,86 @@ async function dmNightAndSchedule(gameId: string): Promise<void> {
   const players = await getPlayersForGame(gameId);
   await dmNightActionsForAlivePlayers({ game, players });
   await scheduleNightTimeout(gameId, game.current_night);
+}
+
+async function applyLoverSorrowDeaths(
+  gameId: string,
+  players: GamePlayerState[],
+): Promise<{ sorrowVictimId: string | null; partnerId: string | null }> {
+  const lovers = await getLovers(gameId);
+  if (!lovers) {
+    return { sorrowVictimId: null, partnerId: null };
+  }
+
+  const { loverAId, loverBId } = lovers;
+  const loverA = players.find((p) => p.user_id === loverAId);
+  const loverB = players.find((p) => p.user_id === loverBId);
+  if (!loverA || !loverB) {
+    return { sorrowVictimId: null, partnerId: null };
+  }
+
+  const aAlive = loverA.is_alive;
+  const bAlive = loverB.is_alive;
+
+  if (aAlive === bAlive) {
+    // Both alive or both dead — no sorrow death to apply.
+    return { sorrowVictimId: null, partnerId: null };
+  }
+
+  const survivor = aAlive ? loverA : loverB;
+  const partner = aAlive ? loverB : loverA;
+
+  await markPlayerDead(gameId, survivor.user_id);
+  survivor.is_alive = false;
+
+  return { sorrowVictimId: survivor.user_id, partnerId: partner.user_id };
+}
+
+async function buildWinLinesWithLovers(
+  gameId: string,
+  players: GamePlayerState[],
+  win: WinResult,
+): Promise<string[]> {
+  const baseLines = buildWinLines(win);
+  const lovers = await getLovers(gameId);
+  if (!lovers) {
+    return baseLines;
+  }
+
+  const { loverAId, loverBId } = lovers;
+  const loverA = players.find((p) => p.user_id === loverAId);
+  const loverB = players.find((p) => p.user_id === loverBId);
+  if (!loverA || !loverB) {
+    return baseLines;
+  }
+
+  const alive = players.filter((p) => p.is_alive);
+  const aliveLovers = [loverA, loverB].filter((p) => p.is_alive);
+
+  if (aliveLovers.length !== 2) {
+    return baseLines;
+  }
+
+  // Case 1: Lovers are the last two alive — they win together regardless of team.
+  if (alive.length === 2) {
+    return [...baseLines, loversWinAloneLine(loverAId, loverBId)];
+  }
+
+  // Case 2: Both Lovers alive and at least one is on the winning side.
+  let loverOnWinningSide = false;
+  if (win.winner === 'wolves') {
+    loverOnWinningSide = aliveLovers.some((p) => p.alignment === 'wolf');
+  } else if (win.winner === 'town') {
+    loverOnWinningSide = aliveLovers.some((p) => p.alignment === 'town');
+  } else if (win.winner === 'arsonist') {
+    loverOnWinningSide = aliveLovers.some((p) => p.role === 'arsonist');
+  }
+
+  if (loverOnWinningSide) {
+    return [...baseLines, loversAlsoWinLine(loverAId, loverBId)];
+  }
+
+  return baseLines;
 }
 
 /** Atomically advance day → night, then DM night prompts and schedule the timeout. */
@@ -162,6 +248,27 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       visitActions,
       wolfExtraKills,
     });
+
+    // Apply Lover sorrow deaths after all primary night kills have resolved.
+    const { sorrowVictimId, partnerId } = await applyLoverSorrowDeaths(
+      gameId,
+      updatedPlayers,
+    );
+    if (sorrowVictimId) {
+      killedIds.push(sorrowVictimId);
+      const sorrowDeath: NightDeathInfo =
+        partnerId != null
+          ? {
+              playerId: sorrowVictimId,
+              cause: 'lover_sorrow',
+              relatedPlayerId: partnerId,
+            }
+          : {
+              playerId: sorrowVictimId,
+              cause: 'lover_sorrow',
+            };
+      nightDeaths.push(sorrowDeath);
+    }
 
     // If the Wolf Cub died tonight, DM surviving pack members.
     const wolfCubDeath = nightDeaths.find((d) => {
@@ -232,7 +339,8 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
 
       if (win) {
-        lines.push(...buildWinLines(win));
+        const winLines = await buildWinLinesWithLovers(gameId, updatedPlayers, win);
+        lines.push(...winLines);
         lines.push(...finalRolesLines(updatedPlayers));
       } else {
         lines.push(buildDayStartLine(upcomingDay));
@@ -340,6 +448,16 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             arsonistFireAwayDeathLine(victim.user_id) +
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
+          );
+        }
+        break;
+      }
+      case 'lover_sorrow': {
+        const victim = playersById.get(death.playerId);
+        if (victim) {
+          lines.push(
+            loverSorrowDeathLine(victim.user_id, death.relatedPlayerId) +
               ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
@@ -725,6 +843,12 @@ export async function maybeResolveDay(
     await markPlayerDead(gameId, lynchId);
     const updatedPlayers = await getPlayersForGame(gameId);
 
+    const { sorrowVictimId: daySorrowVictimId, partnerId: daySorrowPartnerId } =
+      await applyLoverSorrowDeaths(gameId, updatedPlayers);
+    const daySorrowVictim = daySorrowVictimId
+      ? updatedPlayers.find((p) => p.user_id === daySorrowVictimId) ?? null
+      : null;
+
     // If the Wolf Cub was lynched, DM surviving pack members and flag extra kill.
     if (lynched.role === 'wolf_cub') {
       const packMates = updatedPlayers.filter(
@@ -769,8 +893,16 @@ export async function maybeResolveDay(
     if (game.channel_id) {
       const lines: string[] = [lynchResultLine(lynched)];
 
+      if (daySorrowVictim) {
+        lines.push(
+          loverSorrowDeathLine(daySorrowVictim.user_id, daySorrowPartnerId ?? undefined) +
+            ` They were ${deathSummary(daySorrowVictim.alignment, daySorrowVictim.role)}.`,
+        );
+      }
+
       if (win) {
-        lines.push(...buildWinLines(win));
+        const winLines = await buildWinLinesWithLovers(gameId, updatedPlayers, win);
+        lines.push(...winLines);
         lines.push(...finalRolesLines(updatedPlayers));
       } else {
         lines.push(buildNightFallsLine());
@@ -815,6 +947,13 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
 
     const game = await getGame(gameId);
     const updatedPlayers = await getPlayersForGame(gameId);
+
+    const { sorrowVictimId: hunterSorrowVictimId, partnerId: hunterSorrowPartnerId } =
+      await applyLoverSorrowDeaths(gameId, updatedPlayers);
+    const hunterSorrowVictim = hunterSorrowVictimId
+      ? updatedPlayers.find((p) => p.user_id === hunterSorrowVictimId) ?? null
+      : null;
+
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game?.channel_id) {
@@ -828,8 +967,21 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       } else {
         lines.push(hunterPassLine(hunterId));
       }
+      if (hunterSorrowVictim) {
+        lines.push(
+          loverSorrowDeathLine(
+            hunterSorrowVictim.user_id,
+            hunterSorrowPartnerId ?? undefined,
+          ) +
+            ` They were ${deathSummary(
+              hunterSorrowVictim.alignment,
+              hunterSorrowVictim.role,
+            )}.`,
+        );
+      }
       if (win) {
-        lines.push(...buildWinLines(win));
+        const winLines = await buildWinLinesWithLovers(gameId, updatedPlayers, win);
+        lines.push(...winLines);
         lines.push(...finalRolesLines(updatedPlayers));
       }
       try {

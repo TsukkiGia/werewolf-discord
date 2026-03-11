@@ -15,7 +15,14 @@ import {
   handleWwStatus,
   handleWwStart,
 } from './handlers/commands.js';
-import { handleJoinButton, handleNightAction, handleDayVote, handleHunterShot } from './handlers/components.js';
+import {
+  handleJoinButton,
+  handleNightAction,
+  handleDayVote,
+  handleHunterShot,
+  handleCupidFirstPick,
+  handleCupidSecondPick,
+} from './handlers/components.js';
 
 // Ensure database schema exists before handling traffic
 await initDb();
@@ -64,6 +71,8 @@ app.post(
       if (componentId.startsWith('night_action:')) return handleNightAction(req, res, componentId);
       if (componentId.startsWith('day_vote:')) return handleDayVote(req, res, componentId);
       if (componentId.startsWith('hunter_shot:')) return handleHunterShot(req, res, componentId);
+      if (componentId.startsWith('cupid_link1:')) return handleCupidFirstPick(req, res, componentId);
+      if (componentId.startsWith('cupid_link2:')) return handleCupidSecondPick(req, res, componentId);
 
       console.error(`unknown component: ${componentId}`);
       return res.status(400).json({ error: 'unknown component' });

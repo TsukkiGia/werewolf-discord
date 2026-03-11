@@ -28,7 +28,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   },
   {
     id: 'village_power_reactive',
-    roles: ['hunter'],
+    roles: ['hunter', 'cupid'],
   },
   {
     id: 'village_mason',

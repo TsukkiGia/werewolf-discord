@@ -79,6 +79,61 @@ async function dmNightPromptsCore(params: {
         continue;
       }
 
+      // Cupid uses a custom two-step flow and custom component IDs.
+      if (def.name === 'cupid') {
+        if (nightNumber !== 1) {
+          continue;
+        }
+
+        const options = [];
+        for (const id of playerIds) {
+          if (id === assignment.userId) continue;
+          const label = await getDisplayName(id, game.guild_id);
+          options.push({ label, value: id });
+        }
+
+        if (options.length === 0) continue;
+
+        const dmChannelId = await openDmChannel(assignment.userId);
+
+        const msgRes = await postChannelMessage(dmChannelId, {
+          flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+          components: [
+            {
+              type: MessageComponentTypes.TEXT_DISPLAY,
+              content:
+                'Night 1: choose the first of two players to link as Lovers. You cannot choose yourself.',
+            },
+            {
+              type: MessageComponentTypes.ACTION_ROW,
+              components: [
+                {
+                  type: MessageComponentTypes.STRING_SELECT,
+                  custom_id: `cupid_link1:${game.id}`,
+                  placeholder: 'Choose the first Lover',
+                  min_values: 1,
+                  max_values: 1,
+                  options,
+                },
+              ],
+            },
+          ],
+        });
+
+        const msg = (await msgRes.json()) as { id?: string };
+        if (msg.id) {
+          await recordNightActionPrompt({
+            gameId: game.id,
+            night: nightNumber,
+            userId: assignment.userId,
+            channelId: dmChannelId,
+            messageId: msg.id,
+          });
+        }
+
+        continue;
+      }
+
       let baseContent = def.nightAction.prompt
         ? def.nightAction.prompt.replace('{night}', String(nightNumber))
         : `Night ${nightNumber}: choose your night target.`;

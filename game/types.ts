@@ -3,6 +3,7 @@ export type RoleName =
   | 'villager'
   | 'seer'
   | 'fool'
+  | 'cupid'
   | 'doctor'
   | 'mason'
   | 'sorcerer'
@@ -43,7 +44,7 @@ export interface RoleIntroContext {
   allAssignments: AssignedRole[];
 }
 
-export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion';
+export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion' | 'link';
 
 export interface NightActionDefinition {
   kind: NightActionKind;

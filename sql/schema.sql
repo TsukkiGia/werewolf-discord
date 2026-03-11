@@ -94,3 +94,10 @@ CREATE TABLE IF NOT EXISTS arsonist_douses (
   target_id TEXT NOT NULL,
   PRIMARY KEY (game_id, target_id)
 );
+
+CREATE TABLE IF NOT EXISTS game_lovers (
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  lover_a_id TEXT NOT NULL,
+  lover_b_id TEXT NOT NULL,
+  PRIMARY KEY (game_id)
+);
