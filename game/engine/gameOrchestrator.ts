@@ -10,7 +10,6 @@ import {
   resolveHunterShotRecord,
 } from '../../db.js';
 import { processSeerActions, processDoctorActions } from './nightActionProcessors.js';
-import type { GamePlayerState } from '../../db/players.js';
 import { postChannelMessage } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
 import { evaluateDayResolution } from './dayResolution.js';
@@ -29,18 +28,13 @@ import {
   dawnIntroLine,
   dawnNoVictimLine,
   doctorSavedRumorLine,
+  finalRolesLines,
+  hunterPassLine,
   hunterResolveLine,
+  hunterShotLine,
+  lynchResultLine,
   nightVictimLine,
 } from '../strings/narration.js';
-
-function buildFinalRolesLines(players: GamePlayerState[]): string[] {
-  const header = 'Final roles:';
-  const roleLines =
-    players.length > 0
-      ? players.map((p) => `<@${p.user_id}> — **${p.role}**`)
-      : ['No players were recorded for this game.'];
-  return [header, ...roleLines];
-}
 
 /** DM all alive players their night-action prompts and schedule the night timeout. */
 async function dmNightAndSchedule(gameId: string): Promise<void> {
@@ -170,7 +164,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
       if (win) {
         lines.push(...buildWinLines(win));
-        lines.push(...buildFinalRolesLines(updatedPlayers));
+        lines.push(...finalRolesLines(updatedPlayers));
       } else {
         lines.push(buildDayStartLine(upcomingDay));
       }
@@ -260,15 +254,12 @@ export async function maybeResolveDay(
     await markPlayerDead(gameId, lynchId);
     const updatedPlayers = await getPlayersForGame(gameId);
 
-    const wasWolf = lynched.alignment === 'wolf';
-    const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
-
     // --- 4. Hunter reactive shot (if the hunter was lynched) ---
     if (lynched.role === 'hunter') {
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
         const lines = [
-          `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
+          lynchResultLine(lynchId, lynched.alignment as any),
           hunterResolveLine(),
         ];
         try {
@@ -285,13 +276,11 @@ export async function maybeResolveDay(
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
-      const lines: string[] = [
-        `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
-      ];
+      const lines: string[] = [lynchResultLine(lynchId, lynched.alignment as any)];
 
       if (win) {
         lines.push(...buildWinLines(win));
-        lines.push(...buildFinalRolesLines(updatedPlayers));
+        lines.push(...finalRolesLines(updatedPlayers));
       } else {
         lines.push(buildNightFallsLine());
       }
@@ -341,15 +330,13 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       const lines: string[] = [];
       if (targetId) {
         const target = updatedPlayers.find((p) => p.user_id === targetId);
-        const wasWolf = target?.alignment === 'wolf';
-        const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
-        lines.push(`<@${hunterId}> was eliminated, but took <@${targetId}> down with them. They were ${roleSummary}.`);
+        lines.push(hunterShotLine(hunterId, targetId, target?.alignment as any));
       } else {
-        lines.push(`<@${hunterId}> was eliminated and chose not to shoot.`);
+        lines.push(hunterPassLine(hunterId));
       }
       if (win) {
         lines.push(...buildWinLines(win));
-        lines.push(...buildFinalRolesLines(updatedPlayers));
+        lines.push(...finalRolesLines(updatedPlayers));
       }
       try {
         await postChannelMessage(game.channel_id, { content: lines.join('\n') });

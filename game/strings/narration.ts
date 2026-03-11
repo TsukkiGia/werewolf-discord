@@ -1,4 +1,5 @@
 import type { Alignment } from '../types.js';
+import type { GamePlayerState } from '../../db/players.js';
 
 function pickRandom<T>(items: T[]): T {
   if (items.length === 0) {
@@ -6,6 +7,10 @@ function pickRandom<T>(items: T[]): T {
   }
   const index = Math.floor(Math.random() * items.length);
   return items[index]!;
+}
+
+function teamSummary(alignment: Alignment | null | undefined): string {
+  return alignment === 'wolf' ? 'on the **wolf team**' : 'not on the **wolf team**';
 }
 
 export function dayStartLine(dayNumber: number): string {
@@ -99,13 +104,31 @@ export function revealWolvesLine(wolfMentions: string): string {
 }
 
 export function nightVictimLine(userId: string, alignment: Alignment | null): string {
-  const wasWolf = alignment === 'wolf';
-  const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
-
+  const summary = teamSummary(alignment);
   const variants = [
-    `<@${userId}> was killed during the night. They were ${roleSummary}.`,
-    `By morning, <@${userId}> is found dead. They were ${roleSummary}.`,
-    `<@${userId}> did not survive the night. They were ${roleSummary}.`,
+    `<@${userId}> was killed during the night. They were ${summary}.`,
+    `By morning, <@${userId}> is found dead. They were ${summary}.`,
+    `<@${userId}> did not survive the night. They were ${summary}.`,
   ];
   return pickRandom(variants);
+}
+
+export function lynchResultLine(userId: string, alignment: Alignment | null): string {
+  return `Day vote results: <@${userId}> was lynched. They were ${teamSummary(alignment)}.`;
+}
+
+export function hunterShotLine(hunterId: string, targetId: string, alignment: Alignment | null | undefined): string {
+  return `<@${hunterId}> was eliminated, but took <@${targetId}> down with them. They were ${teamSummary(alignment)}.`;
+}
+
+export function hunterPassLine(hunterId: string): string {
+  return `<@${hunterId}> was eliminated and chose not to shoot.`;
+}
+
+export function finalRolesLines(players: GamePlayerState[]): string[] {
+  const roleLines =
+    players.length > 0
+      ? players.map((p) => `<@${p.user_id}> — **${p.role}**`)
+      : ['No players were recorded for this game.'];
+  return ['Final roles:', ...roleLines];
 }
