@@ -243,7 +243,29 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
     });
   }
 
-  const inserted = await recordDayVote({ gameId: game.id, day: dayNumber, voterId: actorId, targetId });
+  // Clumsy Guy mechanic: 50% chance their vote goes to a random
+  // living player (still never themselves) instead of their choice.
+  let finalTargetId = targetId;
+  const actor = players.find((p) => p.user_id === actorId);
+  if (actor?.role === 'clumsy_guy') {
+    const roll = Math.random();
+    if (roll < 0.5) {
+      const eligibleTargets = players
+        .filter((p) => p.is_alive && p.user_id !== actorId)
+        .map((p) => p.user_id);
+      if (eligibleTargets.length > 0) {
+        const index = Math.floor(Math.random() * eligibleTargets.length);
+        finalTargetId = eligibleTargets[index]!;
+      }
+    }
+  }
+
+  const inserted = await recordDayVote({
+    gameId: game.id,
+    day: dayNumber,
+    voterId: actorId,
+    targetId: finalTargetId,
+  });
 
   if (!inserted) {
     return res.send({
@@ -255,7 +277,7 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
       gameId: game.id,
       day: dayNumber,
       voterId: actorId,
-      targetId,
+      targetId: finalTargetId,
     });
   }
 
@@ -264,9 +286,9 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
     data: {
       flags: InteractionResponseFlags.IS_COMPONENTS_V2,
       components: [
-        {
-          type: MessageComponentTypes.TEXT_DISPLAY,
-          content: `Your vote to lynch <@${targetId}> has been recorded.`,
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content: `Your vote to lynch <@${finalTargetId}> has been recorded.`,
         },
       ],
     },
@@ -275,7 +297,7 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
   if (game.channel_id) {
     try {
       await postChannelMessage(game.channel_id, {
-        content: `<@${actorId}> votes to lynch <@${targetId}>.`,
+        content: `<@${actorId}> votes to lynch <@${finalTargetId}>.`,
       });
     } catch (err) {
       console.error('Failed to send day vote announcement', err);
