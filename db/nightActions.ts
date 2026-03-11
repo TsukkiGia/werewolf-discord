@@ -241,9 +241,14 @@ export async function processDoctorActions(
 
       if (saved) anySaved = true;
 
-      const content = saved
-        ? `You protected <@${targetId}>. The wolves attacked them tonight, but you saved their life.`
-        : `You protected <@${targetId}>. Nothing happened to them tonight.`;
+      const isSelf = targetId === doctorId;
+      const content = isSelf
+        ? saved
+          ? 'You protected yourself. The wolves came for you tonight, but you survived.'
+          : 'You protected yourself. The wolves left you alone tonight.'
+        : saved
+          ? `You protected <@${targetId}>. The wolves attacked them tonight, but you saved their life.`
+          : `You protected <@${targetId}>. Nothing happened to them tonight.`;
 
       try {
         const dmChannelId = await openDmChannel(doctorId);

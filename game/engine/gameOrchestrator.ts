@@ -43,6 +43,7 @@ function buildFinalRolesLines(players: GamePlayerState[]): string[] {
   return [header, ...roleLines];
 }
 
+/** DM all alive players their night-action prompts and schedule the night timeout. */
 async function dmNightAndSchedule(gameId: string): Promise<void> {
   const game = await getGame(gameId);
   if (!game || game.status !== 'night') return;
@@ -51,12 +52,20 @@ async function dmNightAndSchedule(gameId: string): Promise<void> {
   await scheduleNightTimeout(gameId, game.current_night);
 }
 
+/** Atomically advance day → night, then DM night prompts and schedule the timeout. */
 export async function advanceToNightAndDmNightActions(gameId: string): Promise<void> {
   const claimed = await advancePhase(gameId, 'day'); // atomic day -> night
   if (!claimed) return;
   await dmNightAndSchedule(gameId);
 }
 
+/**
+ * Called when a night action is submitted or the night timeout fires.
+ * Checks if all required night actions are in, then resolves the night:
+ *   1. Seer inspections → DM results
+ *   2. Wolf kill vs. doctor protection → apply kills, DM doctors
+ *   3. Dawn announcement → hunter reactive shot or day start
+ */
 export async function maybeResolveNight(gameId: string): Promise<void> {
   try {
     const game = await getGame(gameId);
@@ -66,6 +75,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
     const nightNumber = game.current_night || 1;
 
+    // --- 1. Check if all night actions are in ---
     const players = await getPlayersForGame(gameId);
     const actions = await getNightActionsForNight(gameId, nightNumber);
 
@@ -81,10 +91,12 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     if (!claimed) return;
 
     const { killTargets, protectTargets } = nightResolution;
-    const victimId = chooseKillVictim(killTargets);
 
+    // --- 2. Seer inspections (DM only, no kills yet) ---
     await processSeerActions(players, actions);
 
+    // --- 3. Apply wolf kill (blocked if target is protected) ---
+    const victimId = chooseKillVictim(killTargets);
     const protectedSet = new Set(protectTargets);
     const killedIds: string[] = [];
     if (victimId && !protectedSet.has(victimId)) {
@@ -92,8 +104,10 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       await markPlayerDead(gameId, victimId);
     }
 
-    // Pass only the resolved victim (not raw wolf votes) so the doctor's
-    // feedback is accurate even when wolves were tied and no kill happened.
+    // --- 4. Doctor actions ---
+    // Pass only the resolved victim (not raw wolf votes) so feedback is accurate
+    // even when wolves tied and no kill happened.
+    // Doctor deaths from wolf retaliation are announced inline and merged back in.
     const { anySaved: doctorSavedSomeone, killedDoctorIds } = await processDoctorActions(
       players,
       actions,
@@ -101,12 +115,18 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       killedIds,
       game.channel_id ?? null,
     );
-    // Doctors killed by wolf retaliation count as night deaths.
     killedIds.push(...killedDoctorIds);
 
+    // --- 5. Refresh player state post-kills ---
     const updatedPlayers = await getPlayersForGame(gameId);
 
-    // Check if the killed player was the Hunter — if so, trigger their reactive shot
+    // --- 6. Hunter reactive shot (if the hunter was killed tonight) ---
+    // The wolf victim is the single player killed by wolf vote (if not saved).
+    // Doctor deaths are already announced inline and excluded from the dawn summary.
+    const wolfVictim = victimId && killedIds.includes(victimId)
+      ? updatedPlayers.find((p) => p.user_id === victimId) ?? null
+      : null;
+
     const killedHunter = killedIds.length > 0
       ? updatedPlayers.find((p) => killedIds.includes(p.user_id) && p.role === 'hunter')
       : null;
@@ -114,11 +134,10 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     if (killedHunter) {
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
-        const victims = updatedPlayers.filter((p) => killedIds.includes(p.user_id));
         const lines: string[] = [dawnIntroLine()];
-        lines.push(
-          ...victims.map((v) => nightVictimLine(v.user_id, v.alignment as any)),
-        );
+        if (wolfVictim) {
+          lines.push(nightVictimLine(wolfVictim.user_id, wolfVictim.alignment as any));
+        }
         lines.push(hunterResolveLine());
         try {
           await postChannelMessage(game.channel_id, { content: lines.join('\n') });
@@ -130,22 +149,24 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
+    // --- 7. Dawn announcement ---
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
-      const victims = updatedPlayers.filter((p) => killedIds.includes(p.user_id));
       const lines: string[] = [];
 
-      if (victims.length === 0) {
+      if (!wolfVictim && killedDoctorIds.length === 0) {
+        // Quiet night — no wolf kill, no doctor death
         lines.push(dawnNoVictimLine());
         if (doctorSavedSomeone) {
           lines.push(doctorSavedRumorLine());
         }
-      } else {
+      } else if (wolfVictim) {
         lines.push(dawnIntroLine());
-        lines.push(
-          ...victims.map((v) => nightVictimLine(v.user_id, v.alignment as any)),
-        );
+        lines.push(nightVictimLine(wolfVictim.user_id, wolfVictim.alignment as any));
+      } else {
+        // Only doctor deaths — already announced inline, just open the day
+        lines.push(dawnIntroLine());
       }
 
       if (win) {
@@ -167,6 +188,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
+    // --- 8. Schedule day voting and timeout ---
     scheduleDayVoting(gameId, upcomingDay);
     scheduleDayTimeout(gameId, upcomingDay);
   } catch (err) {
@@ -174,6 +196,14 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
   }
 }
 
+/**
+ * Called when a day vote is submitted or the day timeout fires.
+ * Checks if a lynch verdict has been reached, then resolves the day:
+ *   1. Plurality/timeout lynch or no-lynch
+ *   2. Announce result and reveal alignment
+ *   3. Hunter reactive shot if the hunter was lynched
+ *   4. Win condition check, or advance to night
+ */
 export async function maybeResolveDay(
   gameId: string,
   { force = false }: { force?: boolean } = {},
@@ -186,6 +216,7 @@ export async function maybeResolveDay(
 
     const dayNumber = game.current_day || 1;
 
+    // --- 1. Check if a lynch verdict has been reached ---
     const players = await getPlayersForGame(gameId);
     const votes = await getVotesForDay(gameId, dayNumber);
 
@@ -204,6 +235,7 @@ export async function maybeResolveDay(
       console.error('Failed to disable day vote prompts', err),
     );
 
+    // --- 2. No-lynch result ---
     if (resolution.state === 'no_lynch') {
       if (game.channel_id) {
         try {
@@ -219,6 +251,7 @@ export async function maybeResolveDay(
       return;
     }
 
+    // --- 3. Apply lynch ---
     const lynchId = resolution.lynchId;
     const lynched = players.find((p) => p.user_id === lynchId);
     if (!lynched || !lynched.is_alive) {
@@ -228,12 +261,13 @@ export async function maybeResolveDay(
     await markPlayerDead(gameId, lynchId);
     const updatedPlayers = await getPlayersForGame(gameId);
 
-    // Check if the lynched player was the Hunter — if so, trigger their reactive shot
+    const wasWolf = lynched.alignment === 'wolf';
+    const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
+
+    // --- 4. Hunter reactive shot (if the hunter was lynched) ---
     if (lynched.role === 'hunter') {
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
-        const wasWolf = lynched.alignment === 'wolf';
-        const roleSummary = wasWolf ? 'on the **wolf team**' : 'not on the **wolf team**';
         const lines = [
           `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
           hunterResolveLine(),
@@ -248,11 +282,10 @@ export async function maybeResolveDay(
       return;
     }
 
+    // --- 5. Win condition check and day resolution announcement ---
     const win = evaluateWinCondition(updatedPlayers);
 
     if (game.channel_id) {
-      const wasWolf = lynched.alignment === 'wolf';
-      const roleSummary = wasWolf ? 'a **wolf**' : 'not a **wolf**';
       const lines: string[] = [
         `Day vote results: <@${lynchId}> was lynched. They were ${roleSummary}.`,
       ];
@@ -276,12 +309,17 @@ export async function maybeResolveDay(
       return;
     }
 
+    // --- 6. Advance to night ---
     await dmNightAndSchedule(gameId);
   } catch (err) {
     console.error('Error resolving day phase', err);
   }
 }
 
+/**
+ * Resolves a hunter's reactive shot after they are eliminated.
+ * The hunter may target a player or pass. Handles both night and day continuations.
+ */
 export async function resolveHunterShot(gameId: string, hunterId: string, targetId: string | null): Promise<void> {
   try {
     // Read the pending shot first to get the continuation
@@ -326,7 +364,8 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       return;
     }
 
-    // Continue game based on continuation field
+    // Continue the game: if the hunter was killed during day, start the next night;
+    // if during night, start the next day.
     if (shot.continuation.startsWith('day:')) {
       const upcomingDay = parseInt(shot.continuation.split(':')[1]!, 10);
       scheduleDayVoting(gameId, upcomingDay);
