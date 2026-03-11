@@ -60,7 +60,7 @@ export function evaluateWinCondition(players: GamePlayerState[]): WinResult | nu
   // Wolves win once there is exactly one town-aligned player left
   // and at least one wolf still alive. This is checked after each
   // night kill (and day lynch) to see if the game should end.
-  if (wolvesAlive == townAlive && wolfPlayers.length > 0) {
+  if (wolvesAlive >= townAlive && wolfPlayers.length > 0) {
     return { winner: 'wolves', wolves: wolfPlayers };
   }
 

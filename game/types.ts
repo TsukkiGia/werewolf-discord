@@ -30,6 +30,12 @@ export interface NightActionDefinition {
   // What kind of target this action expects; for now, just players vs none.
   target: 'player' | 'none';
   canTargetSelf?: boolean;
+  /**
+   * Optional custom prompt text shown in the night-action DM.
+   * If provided, `{night}` will be replaced with the night number.
+   * If omitted, a generic "Night X: choose your night target." prompt is used.
+   */
+  prompt?: string;
 }
 
 export interface RoleDefinition {

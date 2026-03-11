@@ -23,10 +23,10 @@ async function fetchDisplayName(userId: string, guildId: string | null): Promise
       });
       const member = (await res.json()) as {
         nick: string | null;
-        user: { username: string };
-        global_name: string
+        user: { username: string; global_name: string | null };
       };
-      return member.global_name ?? member.nick ?? member.user.username;
+      // Prefer server nickname, then global display name, then username.
+      return member.nick ?? member.user.global_name ?? member.user.username;
     } catch (err) {
       console.error('Failed to fetch guild member', guildId, userId, err);
     }
@@ -46,11 +46,12 @@ async function fetchDisplayName(userId: string, guildId: string | null): Promise
 }
 
 async function getDisplayName(userId: string, guildId: string | null): Promise<string> {
-  const existing = displayNameCache.get(userId);
+  const cacheKey = `${userId}:${guildId ?? ''}`;
+  const existing = displayNameCache.get(cacheKey);
   if (existing) return existing;
 
   const promise = fetchDisplayName(userId, guildId);
-  displayNameCache.set(userId, promise);
+  displayNameCache.set(cacheKey, promise);
   return promise;
 }
 
@@ -67,7 +68,11 @@ async function dmNightPromptsCore(params: {
       const dmChannelId = await openDmChannel(assignment.userId);
       const def = ROLE_REGISTRY[assignment.role];
 
-      const baseContent = `Night ${nightNumber}: choose your night target.`;
+      const defaultContent = `Night ${nightNumber}: choose your night target.`;
+      const baseContent =
+        def.nightAction.prompt
+          ? def.nightAction.prompt.replace('{night}', String(nightNumber))
+          : defaultContent;
 
       const components: any[] = [];
 

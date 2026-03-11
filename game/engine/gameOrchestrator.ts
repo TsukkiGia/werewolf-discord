@@ -33,17 +33,18 @@ function buildFinalRolesLines(players: GamePlayerState[]): string[] {
   return [header, ...roleLines];
 }
 
+async function dmNightAndSchedule(gameId: string): Promise<void> {
+  const game = await getGame(gameId);
+  if (!game || game.status !== 'night') return;
+  const players = await getPlayersForGame(gameId);
+  await dmNightActionsForAlivePlayers({ game, players });
+  await scheduleNightTimeout(gameId, game.current_night);
+}
+
 export async function advanceToNightAndDmNightActions(gameId: string): Promise<void> {
-  await advancePhase(gameId); // day -> night
-
-  const nextGame = await getGame(gameId);
-  if (!nextGame || nextGame.status !== 'night') {
-    return;
-  }
-
-  const nightPlayers = await getPlayersForGame(gameId);
-  await dmNightActionsForAlivePlayers({ game: nextGame, players: nightPlayers });
-  await scheduleNightTimeout(gameId, nextGame.current_night);
+  const claimed = await advancePhase(gameId, 'day'); // atomic day -> night
+  if (!claimed) return;
+  await dmNightAndSchedule(gameId);
 }
 
 export async function maybeResolveNight(gameId: string): Promise<void> {
@@ -63,6 +64,12 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
+    // Atomically claim resolution: advance night -> day.
+    // If another concurrent call already claimed it, bail out.
+    const upcomingDay = (game.current_day || 0) + 1;
+    const claimed = await advancePhase(gameId, 'night');
+    if (!claimed) return;
+
     const { killTargets, protectTargets } = nightResolution;
     const victimId = chooseKillVictim(killTargets);
 
@@ -75,16 +82,17 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       await markPlayerDead(gameId, victimId);
     }
 
+    // Pass only the resolved victim (not raw wolf votes) so the doctor's
+    // feedback is accurate even when wolves were tied and no kill happened.
     const doctorSavedSomeone = await processDoctorActions(
       players,
       actions,
-      killTargets,
+      victimId !== null ? [victimId] : [],
       killedIds,
     );
 
     const updatedPlayers = await getPlayersForGame(gameId);
     const win = evaluateWinCondition(updatedPlayers);
-    const upcomingDay = (game.current_day || 0) + 1;
 
     if (game.channel_id) {
       const victims = updatedPlayers.filter((p) => killedIds.includes(p.user_id));
@@ -127,7 +135,6 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return;
     }
 
-    await advancePhase(gameId);
     scheduleDayVoting(gameId, upcomingDay);
     scheduleDayTimeout(gameId, upcomingDay);
   } catch (err) {
@@ -135,7 +142,10 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
   }
 }
 
-export async function maybeResolveDay(gameId: string): Promise<void> {
+export async function maybeResolveDay(
+  gameId: string,
+  { force = false }: { force?: boolean } = {},
+): Promise<void> {
   try {
     const game = await getGame(gameId);
     if (!game || game.status !== 'day') {
@@ -147,10 +157,15 @@ export async function maybeResolveDay(gameId: string): Promise<void> {
     const players = await getPlayersForGame(gameId);
     const votes = await getVotesForDay(gameId, dayNumber);
 
-    const resolution = evaluateDayResolution(players, votes);
+    const resolution = evaluateDayResolution(players, votes, { force });
     if (resolution.state === 'pending') {
       return;
     }
+
+    // Atomically claim resolution: advance day -> night.
+    // If another concurrent call already claimed it, bail out.
+    const claimed = await advancePhase(gameId, 'day');
+    if (!claimed) return;
 
     if (resolution.state === 'no_lynch') {
       if (game.channel_id) {
@@ -163,7 +178,7 @@ export async function maybeResolveDay(gameId: string): Promise<void> {
         }
       }
 
-      await advanceToNightAndDmNightActions(gameId);
+      await dmNightAndSchedule(gameId);
       return;
     }
 
@@ -204,7 +219,7 @@ export async function maybeResolveDay(gameId: string): Promise<void> {
       return;
     }
 
-    await advanceToNightAndDmNightActions(gameId);
+    await dmNightAndSchedule(gameId);
   } catch (err) {
     console.error('Error resolving day phase', err);
   }

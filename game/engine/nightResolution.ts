@@ -24,13 +24,18 @@ export function chooseKillVictim(killTargets: string[]): string | null {
 
   let bestId: string | null = null;
   let bestCount = 0;
+  let isTie = false;
   for (const [id, count] of counts) {
     if (count > bestCount) {
       bestCount = count;
       bestId = id;
+      isTie = false;
+    } else if (count === bestCount && bestId !== null) {
+      isTie = true;
     }
   }
 
+  if (isTie) return null;
   return bestId;
 }
 

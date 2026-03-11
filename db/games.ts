@@ -116,35 +116,53 @@ export function nextPhase(status: GameStatus): GameStatus {
   return status;
 }
 
-export async function advancePhase(gameId: string): Promise<GameStatus | null> {
+/**
+ * Atomically advance the game phase. Optionally pass `requiredStatus` to only
+ * advance if the game is currently in that exact status — if another concurrent
+ * call already advanced it, the underlying UPDATE will match 0 rows and this
+ * returns null, making the operation safe to call concurrently.
+ */
+export async function advancePhase(
+  gameId: string,
+  requiredStatus?: GameStatus,
+): Promise<GameStatus | null> {
   const game = await getGame(gameId);
   if (!game || game.status === 'ended') {
     return null;
   }
 
-  const newStatus = nextPhase(game.status);
+  if (requiredStatus !== undefined && game.status !== requiredStatus) {
+    return null;
+  }
+
+  const currentStatus = game.status;
+  const newStatus = nextPhase(currentStatus);
 
   let newDay = game.current_day;
   let newNight = game.current_night;
 
-  if (game.status === 'lobby' && newStatus === 'night') {
+  if (currentStatus === 'lobby' && newStatus === 'night') {
     newNight += 1;
-  } else if (game.status === 'night' && newStatus === 'day') {
+  } else if (currentStatus === 'night' && newStatus === 'day') {
     newDay += 1;
-  } else if (game.status === 'day' && newStatus === 'night') {
+  } else if (currentStatus === 'day' && newStatus === 'night') {
     newNight += 1;
   }
 
-  await pool.query(
+  const result = await pool.query(
     `
     UPDATE games
     SET status = $1,
         current_day = $2,
         current_night = $3
-    WHERE id = $4
+    WHERE id = $4 AND status = $5
     `,
-    [newStatus, newDay, newNight, gameId],
+    [newStatus, newDay, newNight, gameId, currentStatus],
   );
+
+  if ((result.rowCount ?? 0) === 0) {
+    return null;
+  }
 
   return newStatus;
 }

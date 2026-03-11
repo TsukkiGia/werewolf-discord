@@ -20,7 +20,7 @@ await initDb();
 await boss.start();
 await registerWorkers();
 await registerNightWorker(maybeResolveNight);
-await registerDayTimeoutWorker(maybeResolveDay);
+await registerDayTimeoutWorker((gameId) => maybeResolveDay(gameId, { force: true }));
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;

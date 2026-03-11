@@ -72,11 +72,16 @@ export type DayResolutionResult =
  * - there is a lynch target (plurality winner),
  * - or the day ends in a no-lynch (tie).
  *
+ * Pass `force: true` to skip the pending check and resolve immediately with
+ * whatever votes exist — used by the day timeout to force resolution even
+ * when not all players have voted.
+ *
  * This is pure game logic; side-effects (messages, DB writes) live in app.ts.
  */
 export function evaluateDayResolution(
   players: GamePlayerState[],
   votes: DayVoteRow[],
+  { force = false }: { force?: boolean } = {},
 ): DayResolutionResult {
   const aliveIds = new Set(
     players.filter((p) => p.is_alive).map((p) => p.user_id),
@@ -85,8 +90,15 @@ export function evaluateDayResolution(
     (v) => aliveIds.has(v.voter_id) && aliveIds.has(v.target_id),
   );
 
+  if (!force) {
+    const voterIds = new Set(validVotes.map((v) => v.voter_id));
+    const allVoted = [...aliveIds].every((id) => voterIds.has(id));
+    if (!allVoted) {
+      return { state: 'pending' };
+    }
+  }
+
   if (validVotes.length === 0) {
-    // No one voted for a valid, living target.
     return { state: 'no_lynch' };
   }
 
