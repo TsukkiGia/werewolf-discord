@@ -83,11 +83,12 @@ export interface DoctorActionResult {
  * - If the doctor targeted a wolf: 50% chance the wolf kills the doctor in
  *   retaliation. The doctor is DM'd either way, and the channel is notified
  *   if they die.
- * - If the doctor targeted a non-wolf who was attacked and survived: saved.
+ * - If the doctor targeted a non-wolf who was attacked and survived *at home*:
+ *   they are considered saved and a rumor line is added at dawn.
  * - If the doctor targeted a non-wolf who wasn't attacked: quiet night.
- * - Future: if the target was absent (e.g. harlot left home), the doctor
- *   should be told the target wasn't home. Pass an `absentIds` set here
- *   when that mechanic is implemented.
+ * - If the doctor targeted someone who was out for the night (based on
+ *   `buildAwayPlayerIds`), the protection fizzles — the doc is told the
+ *   house was empty and no save is recorded.
  */
 export async function processDoctorActions(
   players: GamePlayerState[],
@@ -103,7 +104,7 @@ export async function processDoctorActions(
   let killedDoctorId: string | null = null;
   let doctorDeathInfo: { doctorId: string; wolfTargetId: string } | null = null;
 
-   const awayPlayerIds = buildAwayPlayerIds(actions);
+  const awayPlayerIds = buildAwayPlayerIds(actions);
 
   await Promise.all(
     protectActions.map(async (action) => {
@@ -139,12 +140,18 @@ export async function processDoctorActions(
       }
 
       // Standard protection — target is not a wolf.
-      const saved = killTargets.includes(targetId) && !killedIds.includes(targetId);
-
-      if (saved) anySaved = true;
-
       const isSelf = targetId === doctorId;
-      const targetAway = awayPlayerIds.has(targetId);
+      const targetAway = !isSelf && awayPlayerIds.has(targetId);
+
+      // Body-based protection: if the target is out for the night, the doctor
+      // can't actually shield them. The doc still gets a DM, but no save is
+      // recorded.
+      let saved = false;
+      if (!targetAway) {
+        saved = killTargets.includes(targetId) && !killedIds.includes(targetId);
+        if (saved) anySaved = true;
+      }
+
       const content = isSelf
         ? saved
           ? 'You guarded yourself tonight. The wolves came for you, but your defenses held.'
@@ -253,8 +260,10 @@ export interface ChemistActionResult {
  * Process Chemist potion-share actions.
  *
  * For each alive Chemist with a `potion` action:
- * - They choose a target player.
- * - One of the two (Chemist or target) dies with 50% probability.
+ * - They choose a target player who is at home.
+ * - If the target is away for the night, the duel does not happen and the
+ *   Chemist is told their target was out.
+ * - Otherwise, one of the two (Chemist or target) dies with 50% probability.
  *
  * Doctor protection does not apply to these deaths.
  */
@@ -267,6 +276,8 @@ export async function processChemistActions(
 ): Promise<ChemistActionResult> {
   const killedByChemist: string[] = [];
   const duels: ChemistDuelInfo[] = [];
+
+  const awayPlayerIds = buildAwayPlayerIds(actions);
 
   const chemists = players.filter((p) => p.is_alive && p.role === 'chemist');
   if (chemists.length === 0) {
@@ -291,6 +302,19 @@ export async function processChemistActions(
 
     const chemistId = chemist.user_id;
     const targetId = target.user_id;
+
+    // If the target is out for the night, the duel never happens.
+    if (awayPlayerIds.has(targetId)) {
+      try {
+        const chemistDm = await openDmChannel(chemistId);
+        await postChannelMessage(chemistDm, {
+          content: `You went looking for <@${targetId}> to share your potions, but they were out for the night. Your vials stayed corked.`,
+        });
+      } catch (err) {
+        console.error('Failed to DM chemist about away target', err);
+      }
+      continue;
+    }
 
     const chemistDies = Math.random() < 0.5;
     const victimId = chemistDies ? chemistId : targetId;

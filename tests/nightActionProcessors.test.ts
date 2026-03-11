@@ -429,6 +429,42 @@ describe('processChemistActions', () => {
     expect(sentMessages).toHaveLength(0);
   });
 
+  it('does not resolve a duel when the target is away from home', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'chem', role: 'chemist', alignment: 'town' }),
+      makePlayer({ user_id: 't', role: 'villager', alignment: 'town' }),
+      makePlayer({ user_id: 'other', role: 'villager', alignment: 'town' }),
+    ];
+
+    const actions: NightActionRow[] = [
+      // Target is out visiting someone else
+      makeAction({
+        actor_id: 't',
+        target_id: 'other',
+        action_kind: 'visit',
+        role: 'harlot',
+      }),
+      // Chemist attempts to duel that target
+      makeAction({
+        actor_id: 'chem',
+        target_id: 't',
+        action_kind: 'potion',
+        role: 'chemist',
+      }),
+    ];
+
+    const res = await processChemistActions(players, actions, 1, 'g', []);
+
+    expect(res.killedIds).toEqual([]);
+    expect(res.duels).toEqual([]);
+    expect(markPlayerDeadMock).not.toHaveBeenCalled();
+
+    // Chemist should get a DM explaining the target was out for the night.
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]!.channelId).toBe('dm:chem');
+    expect(sentMessages[0]!.content).toContain('out for the night');
+  });
+
   it('kills the chemist when the duel roll chooses them', async () => {
     const players: GamePlayerState[] = [
       makePlayer({ user_id: 'chem', role: 'chemist', alignment: 'town' }),

@@ -212,7 +212,10 @@ A unique partial index on `(channel_id, guild_id) WHERE status <> 'ended'` enfor
 
 **Doctor protecting a wolf.** 75% chance the doctor dies (retaliation). Uses `WOLF_PACK_ROLES` — sorcerer does not trigger retaliation.
 
-**Away players.** `buildAwayPlayerIds()` determines which players are out of their house each night. Shared across harlot (escapes wolf kill), arsonist fire (kills visitors at doused houses), and doctor (can't protect away players).
+**Away players.** `buildAwayPlayerIds()` determines which players are out of their house each night: any `visit`, `kill`, `protect`, or `potion` action with a target marks the **actor** as away from their own home. This is shared across:
+- **Wolf kills (body-based):** wolves can only kill a victim who is both unprotected **and at home**. If their chosen target is away, the kill is wasted and both sides get DMs.
+- **Doctor + Chemist (body-based):** doctor protection and Chemist duels require the target to be at home. If the target is away, the action fizzles (no save / no duel) and the actor gets a DM that the target was out for the night.
+- **Harlot + Arsonist (house-based):** these act on *houses*. Harlot visiting and Arsonist dousing/igniting resolve based on which house is targeted; home/away only changes who is physically present (e.g. visitors vs occupants, special narration for coming home to a burned house).
 
 **All narration in one place.** `game/strings/narration.ts` is the single source of truth. The orchestrator contains zero inline strings.
 
