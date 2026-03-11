@@ -66,9 +66,9 @@ import {
   alphaWolfTurnedYouLine,
   alphaWolfTurnedPackLine,
   alphaWolfBiteChannelLine,
-   loversWinAloneLine,
-   loversAlsoWinLine,
-   loverSorrowDeathLine,
+  loversWinAloneLine,
+  loversAlsoWinLine,
+  loverSorrowDeathLine,
   wolfCubDeathPackLine,
 } from '../strings/narration.js';
 
@@ -184,6 +184,18 @@ async function buildWinLinesWithLovers(
   }
 
   return baseLines;
+}
+
+function isTannerLynchWin(
+  lynched: GamePlayerState,
+  players: GamePlayerState[],
+): boolean {
+  if (lynched.role !== 'tanner') return false;
+  // Tanner wins only if they are the lynch target and there are no other
+  // tanners alive (role is unique, so this is mostly a sanity check).
+  return !players.some(
+    (p) => p.user_id !== lynched.user_id && p.role === 'tanner' && p.is_alive,
+  );
 }
 
 /** Atomically advance day → night, then DM night prompts and schedule the timeout. */
@@ -843,6 +855,25 @@ export async function maybeResolveDay(
 
     await markPlayerDead(gameId, lynchId);
     const updatedPlayers = await getPlayersForGame(gameId);
+
+    // Immediate Tanner win on lynch: the game ends with the Tanner as the
+    // sole winner; town and wolves both lose.
+    if (isTannerLynchWin(lynched, updatedPlayers)) {
+      if (game.channel_id) {
+        const lines = [
+          lynchResultLine(lynched),
+          'In a cruel twist, the village has hanged the Tanner — a miserable soul who wanted nothing more than to die.',
+          'The Tanner wins alone. Everyone else loses.',
+        ];
+        try {
+          await postChannelMessage(game.channel_id, { content: lines.join('\n') });
+        } catch (err) {
+          console.error('Failed to send Tanner win message', err);
+        }
+      }
+      await endGame(gameId);
+      return;
+    }
 
     const { sorrowVictimId: daySorrowVictimId, partnerId: daySorrowPartnerId } =
       await applyLoverSorrowDeaths(gameId, updatedPlayers);

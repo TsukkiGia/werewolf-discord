@@ -13,7 +13,8 @@ export type RoleName =
   | 'harlot'
   | 'clumsy_guy'
   | 'chemist'
-  | 'arsonist';
+  | 'arsonist'
+  | 'tanner';
 
 /** The wolf_core roles that form the pack (excludes wolf_support like sorcerer). */
 export const WOLF_PACK_ROLES: ReadonlySet<RoleName> = new Set(['werewolf', 'wolf_cub', 'alpha_wolf']);

@@ -6,7 +6,7 @@ import { validateSetup } from './validateSetup.js';
 
 const WOLF_PACK: RoleName[] = ['werewolf', 'wolf_cub', 'alpha_wolf'];
 
-const NEUTRAL_ROLES: RoleName[] = ['arsonist'];
+const NEUTRAL_ROLES: RoleName[] = ['arsonist', 'tanner'];
 
 /**
  * Town power roles with their balance strength values.

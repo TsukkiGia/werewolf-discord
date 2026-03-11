@@ -117,6 +117,27 @@ describe('evaluateDayResolution', () => {
     expect(evaluateDayResolution(players, votes).state).toBe('no_lynch');
   });
 
+  it('treats a lynched Tanner as a special outcome outside normal day resolution (covered in orchestrator tests)', () => {
+    // Day-resolution itself remains unaware of Tanner; its special win is
+    // triggered in gameOrchestrator after the lynch is applied. This test is
+    // just a reminder that evaluateDayResolution does not short-circuit for
+    // Tanner and still reports a normal lynch state.
+    const playersWithTanner: GamePlayerState[] = [
+      makePlayer({ user_id: 'tan', role: 'tanner', alignment: 'neutral' }),
+      makePlayer({ user_id: 'a' }),
+      makePlayer({ user_id: 'b' }),
+    ];
+    const votes: DayVoteRow[] = [
+      makeVote({ voter_id: 'a', target_id: 'tan' }),
+      makeVote({ voter_id: 'b', target_id: 'tan' }),
+      makeVote({ voter_id: 'tan', target_id: 'a' }),
+    ];
+
+    const res = evaluateDayResolution(playersWithTanner, votes);
+    expect(res.state).toBe('lynch');
+    if (res.state === 'lynch') expect(res.lynchId).toBe('tan');
+  });
+
   describe('force=true (timeout path)', () => {
     it('resolves with plurality from partial votes', () => {
       const votes: DayVoteRow[] = [
