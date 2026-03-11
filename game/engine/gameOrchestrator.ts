@@ -17,6 +17,7 @@ import {
   processHarlotActions,
   processChemistActions,
   processArsonistActions,
+  buildAwayPlayerIds,
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
@@ -339,24 +340,42 @@ async function resolveNightActionsAndCollectDeaths(params: {
   const { gameId, nightNumber, players, actions, killTargets, protectTargets, visitActions } =
     params;
 
+  const harlotIds = new Set(
+    players.filter((p) => p.role === 'harlot').map((p) => p.user_id),
+  );
+
   // --- Wolf kill ---
-  // "Not home" mechanic: any player with an active visit action is away for
-  // the night. If the wolf's chosen victim is away, the kill is wasted.
+  // "Not home" mechanic: any player with a night action that targets another
+  // player (visit, kill, protect, potion) is away for the night.
+  // If the wolf's chosen victim is away, the kill is wasted.
   const victimId = chooseKillVictim(killTargets);
   const protectedSet = new Set(protectTargets);
-  const awayPlayerIds = new Set(
-    actions
-      .filter((a) => a.action_kind === 'visit' && a.target_id)
-      .map((a) => a.actor_id),
-  );
+  const awayPlayerIds = buildAwayPlayerIds(actions);
 
   const killedIds: string[] = [];
   const nightDeaths: NightDeathInfo[] = [];
 
   if (victimId && !protectedSet.has(victimId) && !awayPlayerIds.has(victimId)) {
-    killedIds.push(victimId);
-    await markPlayerDead(gameId, victimId);
-    nightDeaths.push({ playerId: victimId, cause: 'wolf_kill' });
+    const wolfVictims = new Set<string>();
+    wolfVictims.add(victimId);
+
+    for (const a of actions) {
+      if (
+        (a.action_kind === 'visit' || a.action_kind === 'potion') &&
+        a.target_id === victimId &&
+        !harlotIds.has(a.actor_id)
+      ) {
+        wolfVictims.add(a.actor_id);
+      }
+    }
+
+    for (const id of wolfVictims) {
+      if (!killedIds.includes(id)) {
+        killedIds.push(id);
+        await markPlayerDead(gameId, id);
+        nightDeaths.push({ playerId: id, cause: 'wolf_kill' });
+      }
+    }
   } else if (victimId && awayPlayerIds.has(victimId)) {
     // Notify wolves that their target wasn't home.
     const killActors = actions.filter(
@@ -374,6 +393,17 @@ async function resolveNightActionsAndCollectDeaths(params: {
         }
       }),
     );
+
+    // Let the intended victim know the wolves came while they were out.
+    try {
+      const dmChannelId = await openDmChannel(victimId);
+      await postChannelMessage(dmChannelId, {
+        content:
+          'You hear whispers in the morning: the wolves came to your house last night, but found it empty. Being out may have saved your life.',
+      });
+    } catch (err) {
+      console.error('Failed to DM away-target wolf miss result', err);
+    }
   }
 
   // --- Doctor actions ---

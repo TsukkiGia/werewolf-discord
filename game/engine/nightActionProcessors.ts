@@ -1,7 +1,7 @@
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { markPlayerDead } from '../../db/players.js';
-import { WOLF_PACK_ROLES, type RoleName } from '../types.js';
+import { WOLF_PACK_ROLES, type RoleName, type NightActionKind } from '../types.js';
 import type { HarlotVisit } from './nightResolution.js';
 import { openDmChannel, postChannelMessage } from '../../utils.js';
 import {
@@ -11,6 +11,19 @@ import {
   harlotVisitNotificationLine,
 } from '../strings/narration.js';
 import { addDousedTarget, clearDousedTargets, getDousedTargets } from '../../db/arsonist.js';
+
+const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'potion', 'protect'];
+
+export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
+  const away = new Set<string>();
+  for (const action of actions) {
+    if (!action.target_id) continue;
+    if (AWAY_ACTION_KINDS.includes(action.action_kind)) {
+      away.add(action.actor_id);
+    }
+  }
+  return away;
+}
 
 /**
  * Process all seer-type night actions by DMing inspection results.
@@ -90,6 +103,8 @@ export async function processDoctorActions(
   let killedDoctorId: string | null = null;
   let doctorDeathInfo: { doctorId: string; wolfTargetId: string } | null = null;
 
+   const awayPlayerIds = buildAwayPlayerIds(actions);
+
   await Promise.all(
     protectActions.map(async (action) => {
       const target = players.find((p) => p.user_id === action.target_id);
@@ -129,13 +144,16 @@ export async function processDoctorActions(
       if (saved) anySaved = true;
 
       const isSelf = targetId === doctorId;
+      const targetAway = awayPlayerIds.has(targetId);
       const content = isSelf
         ? saved
           ? 'You guarded yourself tonight. The wolves came for you, but your defenses held.'
           : 'You guarded yourself tonight. The wolves never came.'
-        : saved
-          ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
-          : `You watched over <@${targetId}>. The night passed quietly.`;
+        : targetAway
+          ? `You went to guard <@${targetId}>, but they were out for the night. You spent the night in their empty house.`
+          : saved
+            ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
+            : `You watched over <@${targetId}>. The night passed quietly.`;
 
       try {
         const dmChannelId = await openDmChannel(doctorId);
@@ -355,6 +373,7 @@ export async function processArsonistActions(
   }
 
   const currentDoused = await getDousedTargets(gameId);
+  const awayPlayerIds = buildAwayPlayerIds(actions);
 
   // Ignite all doused houses
   if (action.target_id === '__ARSONIST_IGNITE__') {
@@ -365,14 +384,10 @@ export async function processArsonistActions(
     const killedByFire: string[] = [];
     const burnedKinds = new Map<string, BurnedVictimInfo['kind']>();
 
-    const isOutKinds = new Set<NightActionRow['action_kind']>(['visit', 'kill']);
-
     for (const houseId of currentDoused) {
       if (killedIds.includes(houseId)) continue;
 
-      const occupantOut = actions.some(
-        (a) => a.actor_id === houseId && isOutKinds.has(a.action_kind),
-      );
+      const occupantOut = awayPlayerIds.has(houseId);
       burnedKinds.set(houseId, occupantOut ? 'occupant_away' : 'occupant_home');
 
       for (const a of actions) {
