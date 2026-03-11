@@ -180,7 +180,13 @@ just orchestrate calls between them.
 
 ---
 
+## References
+
+The role catalogue and many balance ideas are inspired by the excellent role guide at
+tgwerewolf.com.
+
+---
+
 ## License
 
 ISC © Gianna Torpey
-
