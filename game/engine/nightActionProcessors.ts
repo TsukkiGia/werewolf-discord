@@ -2,6 +2,7 @@ import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { markPlayerDead } from '../../db/players.js';
 import { WOLF_PACK_ROLES, type RoleName, type NightActionKind } from '../types.js';
+import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
 import type { HarlotVisit } from './nightResolution.js';
 import { openDmChannel, postChannelMessage } from '../../utils.js';
 import {
@@ -61,21 +62,44 @@ export async function processSeerActions(
       const target = playersById.get(action.target_id as string);
       if (!target) return;
 
+      const userTag = `<@${target.user_id}>`;
       const isWolf = target.alignment === 'wolf';
       const isSeer = target.role === 'seer';
 
       let content: string;
-      if (action.role === 'sorcerer') {
-        if (isWolf) {
-          content = `Your vision reveals that <@${target.user_id}> is aligned with the **wolves**.`;
-        } else if (isSeer) {
-          content = `Your vision reveals that <@${target.user_id}> is the **Seer**.`;
-        } else {
-          content = `Your vision reveals that <@${target.user_id}> is neither a wolf nor the Seer.`;
+
+      switch (action.role) {
+        case 'sorcerer': {
+          if (isWolf) {
+            content = `Your vision reveals that ${userTag} is aligned with the **wolves**.`;
+          } else if (isSeer) {
+            content = `Your vision reveals that ${userTag} is the **Seer**.`;
+          } else {
+            content = `Your vision reveals that ${userTag} is neither a wolf nor the Seer.`;
+          }
+          break;
         }
-      } else {
-        // Default seer-like behavior: reveal exact role.
-        content = `Your vision reveals that <@${target.user_id}> is **${target.role}**.`;
+
+        case 'seer': {
+          const revealedRole = target.role;
+          content = `Your vision reveals that ${userTag} is **${revealedRole}**.`;
+          break;
+        }
+
+        case 'fool': {
+          // Fool: completely random role result, independent of the target.
+          const allRoles = Object.keys(ROLE_REGISTRY) as RoleName[];
+          const randomRole =
+            allRoles[Math.floor(Math.random() * allRoles.length)]!;
+          content = `Your vision reveals that ${userTag} is **${randomRole}**.`;
+          break;
+        }
+
+        default: {
+          // Any other inspect-capable role (future-proof fallback)
+          content = `Your vision reveals that ${userTag} is **${target.role}**.`;
+          break;
+        }
       }
 
       await safeDm(action.actor_id, content, 'seer inspection result');

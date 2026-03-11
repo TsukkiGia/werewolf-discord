@@ -20,7 +20,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   },
   {
     id: 'village_power_info',
-    roles: ['seer'],
+    roles: ['seer', 'fool'],
   },
   {
     id: 'village_power_protect',

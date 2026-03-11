@@ -170,6 +170,14 @@ function attemptSetup(playerCount: number): RoleName[] | null {
   const powerRoles = pickTownPowerRoles(budget, playerCount, playerCount - roles.length - 1);
   roles.push(...powerRoles);
 
+  // Fool: only appears in games that also contain a real Seer. Treated as
+  // fake town power, so it does not spend from the power budget. Ensure we
+  // still leave room for at least one plain villager.
+  const hasSeer = roles.includes('seer');
+  if (hasSeer && isEligible('fool', playerCount) && roles.length + 2 <= playerCount) {
+    roles.push('fool');
+  }
+
   // Fill any remaining slots with plain villagers.
   while (roles.length < playerCount) {
     roles.push('villager');

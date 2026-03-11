@@ -2,6 +2,7 @@ export type RoleName =
   | 'werewolf'
   | 'villager'
   | 'seer'
+  | 'fool'
   | 'doctor'
   | 'mason'
   | 'sorcerer'

@@ -21,12 +21,13 @@ A Discord bot that runs full games of **Werewolf / Mafia** using slash commands,
 - Hunter reactive shot on elimination (night or lynch).
 - All narration posted to the game channel.
 
-**13 roles across 3 alignments**
+**14 roles across 3 alignments**
 
 | Role | Alignment | Night action |
 |---|---|---|
 | Villager | Town | None |
 | Seer | Town | Inspect — learns the exact role of one player |
+| Fool | Town | Inspect — believes they are the Seer; each inspection returns a completely random role |
 | Doctor | Town | Protect — shields one player from night kill (can self-protect) |
 | Hunter | Town | None — shoots one player on elimination |
 | Mason | Town | None — masons know each other at game start |

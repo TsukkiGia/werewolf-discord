@@ -20,6 +20,8 @@ vi.mock('../utils.js', () => ({
 
 // Import after mocking so the mocks are in place
 const { processSeerActions } = await import('../game/engine/nightActionProcessors.js');
+const { ROLE_REGISTRY } = await import('../game/balancing/roleRegistry.js');
+import type { RoleName } from '../game/types.js';
 
 const players: GamePlayerState[] = [
   { user_id: 'wolf1', role: 'werewolf', alignment: 'wolf', is_alive: true },
@@ -89,5 +91,37 @@ describe('processSeerActions — seer inspect results', () => {
     await processSeerActions(players, [seerAction]);
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0]!.content).toContain('**werewolf**');
+  });
+});
+
+describe('processSeerActions — fool inspect results', () => {
+  it('returns a completely random role unrelated to target', async () => {
+    const allRoles = Object.keys(ROLE_REGISTRY) as RoleName[];
+    const randomValue = 0.1337;
+    const expectedRole = allRoles[Math.floor(randomValue * allRoles.length)]!;
+
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(randomValue);
+
+    const foolAction: NightActionRow = {
+      id: 20,
+      game_id: 'g',
+      night: 1,
+      actor_id: 'fool1',
+      target_id: 'wolf1',
+      action_kind: 'inspect',
+      role: 'fool',
+      created_at: Date.now(),
+    };
+
+    await processSeerActions(
+      [...players, { user_id: 'fool1', role: 'fool', alignment: 'town', is_alive: true }],
+      [foolAction],
+    );
+
+    randomSpy.mockRestore();
+
+    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages[0]!.channelId).toBe('dm:fool1');
+    expect(sentMessages[0]!.content).toContain(`**${expectedRole}**`);
   });
 });

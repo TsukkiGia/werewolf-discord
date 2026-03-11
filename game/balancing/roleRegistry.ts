@@ -2,6 +2,7 @@ import type { RoleDefinition } from '../types.js';
 import { VillagerRole } from '../roles/villager.js';
 import { WerewolfRole } from '../roles/werewolf.js';
 import { SeerRole } from '../roles/seer.js';
+import { FoolRole } from '../roles/fool.js';
 import { DoctorRole } from '../roles/doctor.js';
 import { MasonRole } from '../roles/mason.js';
 import { SorcererRole } from '../roles/sorcerer.js';
@@ -18,6 +19,7 @@ export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
   villager: VillagerRole,
   werewolf: WerewolfRole,
   seer: SeerRole,
+  fool: FoolRole,
   doctor: DoctorRole,
   mason: MasonRole,
   sorcerer: SorcererRole,
