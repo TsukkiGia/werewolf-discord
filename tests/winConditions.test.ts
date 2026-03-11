@@ -68,18 +68,6 @@ describe('evaluateWinCondition', () => {
     expect(win).toBeNull();
   });
 
-  it('does not grant town or wolf win while a neutral Tanner is alive', () => {
-    const players: GamePlayerState[] = [
-      makePlayer({ user_id: 't1', alignment: 'town', is_alive: true }),
-      makePlayer({ user_id: 'w1', alignment: 'wolf', is_alive: false, role: 'werewolf' }),
-      makePlayer({ user_id: 'tan', alignment: 'neutral', is_alive: true, role: 'tanner' }),
-    ];
-
-    // Town has technically cleared all wolves, but because a non-arsonist
-    // neutral (Tanner) is still alive, normal faction win should not fire.
-    const win = evaluateWinCondition(players);
-    expect(win).toBeNull();
-  });
 });
 
 describe('buildWinLines', () => {

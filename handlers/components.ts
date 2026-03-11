@@ -317,12 +317,13 @@ export async function handleNightAction(req: Request, res: Response, componentId
   }
   const def = ROLE_REGISTRY[role];
 
+  const isIgnite = targetId === '__ARSONIST_IGNITE__';
   const inserted = await recordNightAction({
     gameId,
     night: nightNumber,
     actorId,
-    targetId,
-    actionKind: def.nightAction.kind,
+    targetId: isIgnite ? null : targetId,
+    actionKind: isIgnite ? 'ignite' : def.nightAction.kind,
     role: def.name,
   });
 

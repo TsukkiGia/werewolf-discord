@@ -101,6 +101,8 @@ interface NightActionResolutionOutcome {
 async function dmNightAndSchedule(gameId: string): Promise<void> {
   const game = await getGame(gameId);
   if (!game || game.status !== 'night') return;
+  // Before sending night prompts, check if a Traitor should wake up as a wolf.
+  await maybeConvertTraitorToWerewolf(gameId);
   const players = await getPlayersForGame(gameId);
   await dmNightActionsForAlivePlayers({ game, players });
   await scheduleNightTimeout(gameId, game.current_night);
@@ -196,6 +198,18 @@ function isTannerLynchWin(
   return !players.some(
     (p) => p.user_id !== lynched.user_id && p.role === 'tanner' && p.is_alive,
   );
+}
+
+async function maybeConvertTraitorToWerewolf(gameId: string): Promise<void> {
+  const players = await getPlayersForGame(gameId);
+  const alive = players.filter((p) => p.is_alive);
+  const wolvesAlive = alive.filter((p) => p.alignment === 'wolf').length;
+  if (wolvesAlive > 0) return;
+
+  const traitor = alive.find((p) => p.role === 'traitor');
+  if (!traitor) return;
+
+  await setPlayerRoleAndAlignment(gameId, traitor.user_id, 'werewolf', 'wolf');
 }
 
 /** Atomically advance day → night, then DM night prompts and schedule the timeout. */

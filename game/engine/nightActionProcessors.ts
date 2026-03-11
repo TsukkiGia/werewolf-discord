@@ -394,10 +394,7 @@ export async function processArsonistActions(
 
   const arsonist = arsonists[0]!;
   const action = actions.find(
-    (a) =>
-      a.actor_id === arsonist.user_id &&
-      a.role === 'arsonist' &&
-      a.action_kind === 'potion',
+    (a) => a.actor_id === arsonist.user_id && a.role === 'arsonist',
   );
 
   if (!action) {
@@ -408,7 +405,7 @@ export async function processArsonistActions(
   const awayPlayerIds = buildAwayPlayerIds(actions);
 
   // Ignite all doused houses
-  if (action.target_id === '__ARSONIST_IGNITE__') {
+  if (action.action_kind === 'ignite') {
     if (currentDoused.length === 0) {
       return { killedIds: [], burnedVictims: [] };
     }

@@ -607,8 +607,8 @@ describe('processArsonistActions', () => {
       // Arsonist chooses to ignite
       makeAction({
         actor_id: 'a',
-        target_id: '__ARSONIST_IGNITE__',
-        action_kind: 'potion',
+        target_id: null,
+        action_kind: 'ignite',
         role: 'arsonist',
       }),
       // Away occupant is out visiting someone else
@@ -654,8 +654,8 @@ describe('processArsonistActions', () => {
     const actions: NightActionRow[] = [
       makeAction({
         actor_id: 'a',
-        target_id: '__ARSONIST_IGNITE__',
-        action_kind: 'potion',
+        target_id: null,
+        action_kind: 'ignite',
         role: 'arsonist',
       }),
     ];
