@@ -4,7 +4,8 @@ import { InteractionType, InteractionResponseType, verifyKeyMiddleware } from 'd
 import { initDb } from './db.js';
 import { boss, registerWorkers } from './jobs/dayVoting.js';
 import { registerNightWorker } from './jobs/nightTimeout.js';
-import { maybeResolveNight } from './game/engine/gameOrchestrator.js';
+import { registerDayTimeoutWorker } from './jobs/dayTimeout.js';
+import { maybeResolveNight, maybeResolveDay } from './game/engine/gameOrchestrator.js';
 import {
   handleWwCreate,
   handleWwEnd,
@@ -19,6 +20,7 @@ await initDb();
 await boss.start();
 await registerWorkers();
 await registerNightWorker(maybeResolveNight);
+await registerDayTimeoutWorker(maybeResolveDay);
 
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;

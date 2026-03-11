@@ -21,6 +21,7 @@ import {
 import { dmNightActionsForAlivePlayers } from './dmRoles.js';
 import { scheduleDayVoting } from '../../jobs/dayVoting.js';
 import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
+import { scheduleDayTimeout } from '../../jobs/dayTimeout.js';
 
 export async function advanceToNightAndDmNightActions(gameId: string): Promise<void> {
   await advancePhase(gameId); // day -> night
@@ -107,6 +108,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
     await advancePhase(gameId);
     scheduleDayVoting(gameId, upcomingDay);
+    scheduleDayTimeout(gameId, upcomingDay);
   } catch (err) {
     console.error('Error resolving night phase', err);
   }
