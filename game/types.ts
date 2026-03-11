@@ -15,7 +15,8 @@ export type RoleName =
   | 'chemist'
   | 'arsonist'
   | 'tanner'
-  | 'traitor';
+  | 'traitor'
+  | 'thief';
 
 /** The wolf_core roles that form the pack (excludes wolf_support like sorcerer). */
 export const WOLF_PACK_ROLES: ReadonlySet<RoleName> = new Set(['werewolf', 'wolf_cub', 'alpha_wolf']);
@@ -46,7 +47,7 @@ export interface RoleIntroContext {
   allAssignments: AssignedRole[];
 }
 
-export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion' | 'ignite' | 'link';
+export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion' | 'ignite' | 'link' | 'steal';
 
 export interface NightActionDefinition {
   kind: NightActionKind;

@@ -1,7 +1,7 @@
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
-import { markPlayerDead } from '../../db/players.js';
-import { WOLF_PACK_ROLES, type RoleName, type NightActionKind } from '../types.js';
+import { markPlayerDead, setPlayerRoleAndAlignment } from '../../db/players.js';
+import { WOLF_PACK_ROLES, type RoleName, type Alignment, type NightActionKind } from '../types.js';
 import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
 import type { HarlotVisit } from './nightResolution.js';
 import { openDmChannel, postChannelMessage } from '../../utils.js';
@@ -10,6 +10,8 @@ import {
   harlotVisitedTargetLine,
   harlotSafeVisitLine,
   harlotVisitNotificationLine,
+  thiefNewRoleDmLine,
+  thiefTargetDmLine,
 } from '../strings/narration.js';
 import { addDousedTarget, clearDousedTargets, getDousedTargets } from '../../db/arsonist.js';
 
@@ -30,7 +32,7 @@ function buildPlayersById(players: GamePlayerState[]): Map<string, GamePlayerSta
   return map;
 }
 
-const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'potion', 'protect'];
+const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'potion', 'protect', 'steal'];
 
 export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
   const away = new Set<string>();
@@ -423,7 +425,8 @@ export async function processArsonistActions(
         if (
           (a.action_kind === 'protect' ||
             a.action_kind === 'visit' ||
-            a.action_kind === 'potion') &&
+            a.action_kind === 'potion' ||
+            a.action_kind === 'steal') &&
           a.target_id === houseId
         ) {
           if (!burnedKinds.has(a.actor_id) && !killedIds.includes(a.actor_id)) {
@@ -460,4 +463,38 @@ export async function processArsonistActions(
   }
 
   return { killedIds: [], burnedVictims: [] };
+}
+
+/**
+ * Process the Thief's night action (night 1 only).
+ *
+ * The Thief steals the target's role and alignment; the target becomes a
+ * plain Villager. Both players are DM'd the result.
+ */
+export async function processThiefActions(
+  gameId: string,
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+): Promise<{ thiefActed: boolean }> {
+  const thief = players.find((p) => p.is_alive && p.role === 'thief');
+  if (!thief) return { thiefActed: false };
+
+  const action = actions.find(
+    (a) => a.actor_id === thief.user_id && a.action_kind === 'steal',
+  );
+  if (!action || !action.target_id) return { thiefActed: false };
+
+  const target = players.find((p) => p.user_id === action.target_id);
+  if (!target) return { thiefActed: false };
+
+  const stolenRole = target.role as RoleName;
+  const stolenAlignment = (target.alignment ?? 'town') as Alignment;
+
+  await setPlayerRoleAndAlignment(gameId, thief.user_id, stolenRole, stolenAlignment);
+  await setPlayerRoleAndAlignment(gameId, target.user_id, 'villager', 'town');
+
+  await safeDm(thief.user_id, thiefNewRoleDmLine(target.user_id, stolenRole), 'thief new role');
+  await safeDm(target.user_id, thiefTargetDmLine(), 'thief target');
+
+  return { thiefActed: true };
 }

@@ -374,6 +374,33 @@ export function alphaWolfBiteChannelLine(): string {
   return pickRandom(variants);
 }
 
+export function thiefStoleLine(): string {
+  const variants = [
+    'Under cover of darkness, a thief crept through the village and stole someone\'s identity.',
+    'A shadowy figure moved through the night, taking what was not theirs to take.',
+    'Someone woke up this morning to find their role had been stolen in the night.',
+  ];
+  return pickRandom(variants);
+}
+
+export function thiefNewRoleDmLine(targetId: string, stolenRole: string): string {
+  const variants = [
+    `You slipped into <@${targetId}>'s home and stole their life. You are now a **${stolenRole}**.`,
+    `Success. <@${targetId}> never knew you were there. Their role is yours now — you are a **${stolenRole}**.`,
+    `You took everything from <@${targetId}>. You are now a **${stolenRole}**.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function thiefTargetDmLine(): string {
+  const variants = [
+    'You wake to find something missing. A thief visited in the night and stole your role. You are now a plain **Villager**.',
+    'Someone crept into your home last night and took your role. You are now a **Villager**.',
+    'Your role was stolen while you slept. You are now a plain **Villager**.',
+  ];
+  return pickRandom(variants);
+}
+
 export function finalRolesLines(players: GamePlayerState[]): string[] {
   const roleLines =
     players.length > 0

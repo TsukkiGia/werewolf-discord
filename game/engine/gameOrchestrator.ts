@@ -22,6 +22,7 @@ import {
   processHarlotActions,
   processChemistActions,
   processArsonistActions,
+  processThiefActions,
   buildAwayPlayerIds,
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
@@ -70,6 +71,7 @@ import {
   loversAlsoWinLine,
   loverSorrowDeathLine,
   wolfCubDeathPackLine,
+  thiefStoleLine,
 } from '../strings/narration.js';
 
 type NightDeathCause =
@@ -257,6 +259,9 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     // --- 2. Seer inspections (DM only, no kills yet) ---
     await processSeerActions(players, actions);
 
+    // --- 2b. Thief role swap (night 1 only) ---
+    const { thiefActed } = await processThiefActions(gameId, players, actions);
+
     // --- 3–7. Apply all killing night actions and refresh player state ---
     const {
       updatedPlayers,
@@ -363,6 +368,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
         doctorSavedSomeone,
       );
       if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
+      if (thiefActed) lines.push(thiefStoleLine());
 
       if (win) {
         const winLines = await buildWinLinesWithLovers(gameId, updatedPlayers, win);
@@ -681,7 +687,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
 
     for (const a of actions) {
       if (
-        (a.action_kind === 'visit' || a.action_kind === 'potion') &&
+        (a.action_kind === 'visit' || a.action_kind === 'potion' || a.action_kind === 'steal') &&
         a.target_id === targetId &&
         !harlotIds.has(a.actor_id)
       ) {
