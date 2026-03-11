@@ -44,6 +44,7 @@ import {
   lynchResultLine,
   nightVictimLine,
   wolfTargetNotHomeLine,
+  wolfMissedYouAwayLine,
   doctorProtectingWolfDeathLine,
   harlotVisitWolfDeathLine,
   harlotVisitWolfVictimDeathLine,
@@ -407,8 +408,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
     try {
       const dmChannelId = await openDmChannel(victimId);
       await postChannelMessage(dmChannelId, {
-        content:
-          'You hear whispers in the morning: the wolves came to your house last night, but found it empty. Being out may have saved your life.',
+        content: wolfMissedYouAwayLine(),
       });
     } catch (err) {
       console.error('Failed to DM away-target wolf miss result', err);

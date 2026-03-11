@@ -149,7 +149,12 @@ export function hunterShotLine(
 }
 
 export function hunterPassLine(hunterId: string): string {
-  return `<@${hunterId}> was eliminated and chose not to shoot.`;
+  const variants = [
+    `<@${hunterId}> was eliminated, but lowered their weapon and let the village face the next night without a final shot.`,
+    `Even in death, <@${hunterId}> held their fire. No last bullet flies from the Hunter’s gun.`,
+    `<@${hunterId}> falls in silence, choosing not to pull the trigger one last time.`,
+  ];
+  return pickRandom(variants);
 }
 
 export function harlotVisitedWolfLine(targetId: string): string {
@@ -181,9 +186,9 @@ export function harlotVisitNotificationLine(): string {
 
 export function harlotSafeVisitLine(targetId: string): string {
   const variants = [
-    `You spend the night with <@${targetId}>. Every shadow looks like fangs, but dawn finds you both alive.`,
-    `You jolt awake in <@${targetId}>'s bed, sure you heard claws. It's nothing — they are no wolf.`,
-    `You gamble on <@${targetId}> and win. No claws, no blood — you slip home before sunrise.`,
+    `You spend the night with <@${targetId}>. Every shadow looks like fangs, but by dawn you’re sure: they are not a wolf.`,
+    `You jolt awake in <@${targetId}>'s bed, sure you heard claws. It was just the wind — <@${targetId}> is no wolf.`,
+    `You gamble on visiting <@${targetId}> and win. No claws, no blood — and you leave knowing they are not a wolf.`,
   ];
   return pickRandom(variants);
 }
@@ -193,6 +198,15 @@ export function wolfTargetNotHomeLine(targetId: string): string {
     `You crept to <@${targetId}>'s door — but they weren't home. Your kill was wasted.`,
     `<@${targetId}> was out for the night. You waited, but they never came back. Your kill is wasted.`,
     `The house was empty. <@${targetId}> was not home tonight. You return with blood on no one's hands.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function wolfMissedYouAwayLine(): string {
+  const variants = [
+    'In the morning, you hear hushed voices: the wolves clawed at your door last night, but found only an empty house. Being out may have saved your life.',
+    'Rumor spreads that wolves stalked your doorstep while you were gone. Your house is scarred, but you are alive.',
+    'By dawn, the village is whispering: the wolves came hunting for you, but you were nowhere to be found.',
   ];
   return pickRandom(variants);
 }
@@ -262,9 +276,9 @@ export function arsonistFireHomeDeathLine(victimId: string): string {
 
 export function arsonistFireAwayDeathLine(victimId: string): string {
   const variants = [
-    `<@${victimId}> is found near the smoldering remains of their home, the shock of the blaze written on their face.`,
-    `By dawn, <@${victimId}>'s house is a blackened shell — and <@${victimId}> lies dead nearby, never having recovered from the night.`,
-    `The village wakes to the smell of ash. <@${victimId}>'s home is gone, and so is <@${victimId}> — the disaster broke more than just wood and stone.`,
+    `<@${victimId}> is found near the smoldering remains of their home, the shock of returning to a burned-out shell written on their face.`,
+    `By dawn, <@${victimId}>'s house is a blackened shell — and <@${victimId}> lies dead nearby, never having made it inside before the blaze consumed everything.`,
+    `The village wakes to the smell of ash. <@${victimId}>'s home is gone, and so is <@${victimId}> — the fire claimed them when they came back to nothing but ruin.`,
   ];
   return pickRandom(variants);
 }
