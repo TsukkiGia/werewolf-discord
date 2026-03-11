@@ -54,13 +54,16 @@ describe('chooseLynchVictim', () => {
 });
 
 describe('evaluateDayResolution', () => {
-  it('is pending while not all alive players have voted', () => {
+  it('lynches the plurality target even if not everyone has voted', () => {
     const votes: DayVoteRow[] = [
       makeVote({ voter_id: 'a', target_id: 'b' }),
     ];
 
     const res = evaluateDayResolution(players, votes);
-    expect(res.state).toBe('pending');
+    expect(res.state).toBe('lynch');
+    if (res.state === 'lynch') {
+      expect(res.lynchId).toBe('b');
+    }
   });
 
   it('returns lynch when majority reached and everyone has voted', () => {

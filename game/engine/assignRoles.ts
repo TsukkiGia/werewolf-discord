@@ -14,7 +14,7 @@ function shuffle<T>(items: T[]): T[] {
 
 export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
   if (playerIds.length === 0) return [];
-  
+
   const shuffledPlayers = shuffle(playerIds);
   const setup = chooseSetup(playerIds.length);
 

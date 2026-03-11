@@ -9,6 +9,7 @@ import {
   endGame,
   getVotesForDay,
 } from '../../db.js';
+import type { GamePlayerState } from '../../db/players.js';
 import { postChannelMessage } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
 import { evaluateDayResolution } from './dayResolution.js';
@@ -22,6 +23,15 @@ import { dmNightActionsForAlivePlayers } from './dmRoles.js';
 import { scheduleDayVoting } from '../../jobs/dayVoting.js';
 import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
 import { scheduleDayTimeout } from '../../jobs/dayTimeout.js';
+
+function buildFinalRolesLines(players: GamePlayerState[]): string[] {
+  const header = 'Final roles:';
+  const roleLines =
+    players.length > 0
+      ? players.map((p) => `<@${p.user_id}> — **${p.role}**`)
+      : ['No players were recorded for this game.'];
+  return [header, ...roleLines];
+}
 
 export async function advanceToNightAndDmNightActions(gameId: string): Promise<void> {
   await advancePhase(gameId); // day -> night
@@ -100,6 +110,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
       if (win) {
         lines.push(...buildWinLines(win));
+        lines.push(...buildFinalRolesLines(updatedPlayers));
       } else {
         lines.push(buildDayStartLine(upcomingDay));
       }
@@ -176,6 +187,7 @@ export async function maybeResolveDay(gameId: string): Promise<void> {
 
       if (win) {
         lines.push(...buildWinLines(win));
+        lines.push(...buildFinalRolesLines(updatedPlayers));
       } else {
         lines.push(buildNightFallsLine());
       }

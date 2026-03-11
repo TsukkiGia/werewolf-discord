@@ -81,19 +81,16 @@ export function evaluateDayResolution(
   const aliveIds = new Set(
     players.filter((p) => p.is_alive).map((p) => p.user_id),
   );
-  const aliveCount = aliveIds.size;
-
-  const votedIds = new Set(
-    votes
-      .filter((v) => aliveIds.has(v.voter_id) && aliveIds.has(v.target_id))
-      .map((v) => v.voter_id),
+  const validVotes = votes.filter(
+    (v) => aliveIds.has(v.voter_id) && aliveIds.has(v.target_id),
   );
 
-  if (votedIds.size < aliveCount) {
-    return { state: 'pending' };
+  if (validVotes.length === 0) {
+    // No one voted for a valid, living target.
+    return { state: 'no_lynch' };
   }
 
-  const lynchId = chooseLynchVictim(players, votes);
+  const lynchId = chooseLynchVictim(players, validVotes);
   if (!lynchId) {
     return { state: 'no_lynch' };
   }
