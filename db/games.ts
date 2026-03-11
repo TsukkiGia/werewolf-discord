@@ -32,10 +32,13 @@ export async function createGame(params: {
       [params.id, params.guildId, params.channelId, params.hostId, 'lobby', createdAt],
     );
     return true;
-  } catch (err: any) {
+  } catch (err: unknown) {
     // 23505 = unique_violation (e.g., due to active_games_per_channel index or id PK).
-    if (err && typeof err.code === 'string' && err.code === '23505') {
-      return false;
+    const maybePgErr = err as { code?: unknown } | null;
+    if (maybePgErr && typeof maybePgErr.code === 'string') {
+      if (maybePgErr.code === '23505') {
+        return false;
+      }
     }
     throw err;
   }

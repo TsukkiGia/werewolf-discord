@@ -197,6 +197,15 @@ export function wolfTargetNotHomeLine(targetId: string): string {
   return pickRandom(variants);
 }
 
+export function wolfKillDmLine(): string {
+  const variants = [
+    'In the dead of night, the wolves found you. Teeth flashed, claws tore, and your story ended in the dark.',
+    'You remember the sound of paws in the grass, a growl in the dark, and then nothing. The wolves devoured you in the night.',
+    'The last thing you felt was hot breath at your throat and the crush of fangs. The wolves feasted — and you were the meal.',
+  ];
+  return pickRandom(variants);
+}
+
 export function doctorProtectingWolfDeathLine(doctorId: string): string {
   const variants = [
     `<@${doctorId}> tried to shield a wolf in disguise and was killed for it.`,

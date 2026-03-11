@@ -1,6 +1,6 @@
 import { pool } from './client.js';
 import { assignRolesForPlayerIds } from '../game/engine/assignRoles.js';
-import type { AssignedRole } from '../game/types.js';
+import type { AssignedRole, Alignment } from '../game/types.js';
 
 export async function addPlayer(gameId: string, userId: string): Promise<void> {
   const joinedAt = Date.now();
@@ -70,7 +70,7 @@ export async function assignRolesForGame(gameId: string): Promise<AssignedRole[]
 export interface GamePlayerState {
   user_id: string;
   role: string;
-  alignment: string | null;
+  alignment: Alignment | null;
   is_alive: boolean;
 }
 

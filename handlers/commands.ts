@@ -20,8 +20,9 @@ import { dmRolesForAssignments, dmNightActionsForAlivePlayers } from '../game/en
 import { scheduleNightTimeout } from '../jobs/nightTimeout.js';
 import { buildStatusLines } from '../game/engine/status.js';
 import { getInteractionUserId, getGuildAndChannelIds } from '../interactionHelpers.js';
+import type { Request, Response } from 'express';
 
-export function buildJoinClosedComponents(): any[] {
+export function buildJoinClosedComponents(): { type: MessageComponentTypes.TEXT_DISPLAY; content: string }[] {
   return [
     {
       type: MessageComponentTypes.TEXT_DISPLAY,
@@ -30,7 +31,7 @@ export function buildJoinClosedComponents(): any[] {
   ];
 }
 
-export async function handleWwCreate(req: any, res: any): Promise<any> {
+export async function handleWwCreate(req: Request, res: Response) {
   const { id } = req.body;
   const userId = getInteractionUserId(req);
   if (!userId) {
@@ -104,7 +105,7 @@ export async function handleWwCreate(req: any, res: any): Promise<any> {
   });
 }
 
-export async function handleWwEnd(req: any, res: any): Promise<any> {
+export async function handleWwEnd(req: Request, res: Response) {
   const { guildId, channelId } = getGuildAndChannelIds(req);
   const game = await getActiveGameForChannel(guildId, channelId);
 
@@ -135,7 +136,7 @@ export async function handleWwEnd(req: any, res: any): Promise<any> {
   });
 }
 
-export async function handleWwHelp(_req: any, res: any): Promise<any> {
+export async function handleWwHelp(_req: Request, res: Response) {
   const helpLines = [
     '**Werewolf bot help**',
     '',
@@ -162,7 +163,7 @@ export async function handleWwHelp(_req: any, res: any): Promise<any> {
   });
 }
 
-export async function handleWwStatus(req: any, res: any): Promise<any> {
+export async function handleWwStatus(req: Request, res: Response) {
   const { guildId, channelId } = getGuildAndChannelIds(req);
   const game = await getActiveGameForChannel(guildId, channelId);
 
@@ -182,7 +183,7 @@ export async function handleWwStatus(req: any, res: any): Promise<any> {
   });
 }
 
-export async function handleWwStart(req: any, res: any): Promise<any> {
+export async function handleWwStart(req: Request, res: Response) {
   const { guildId, channelId } = getGuildAndChannelIds(req);
   const game = await getActiveGameForChannel(guildId, channelId);
 

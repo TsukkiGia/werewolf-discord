@@ -18,8 +18,9 @@ import { getInteractionUserId } from '../interactionHelpers.js';
 import { maybeResolveNight, maybeResolveDay, resolveHunterShot } from '../game/engine/gameOrchestrator.js';
 import { buildJoinClosedComponents } from './commands.js';
 import { logEvent } from '../logging.js';
+import type { Request, Response } from 'express';
 
-export async function handleJoinButton(req: any, res: any, componentId: string): Promise<any> {
+export async function handleJoinButton(req: Request, res: Response, componentId: string) {
   const gameId = componentId.replace('join_button_', '');
   const game = await getGame(gameId);
 
@@ -80,7 +81,7 @@ export async function handleJoinButton(req: any, res: any, componentId: string):
   });
 }
 
-export async function handleNightAction(req: any, res: any, componentId: string): Promise<any> {
+export async function handleNightAction(req: Request, res: Response, componentId: string) {
   const withoutPrefix = componentId.replace('night_action:', '');
   const [gameId, role] = withoutPrefix.split(':');
 
@@ -161,7 +162,7 @@ export async function handleNightAction(req: any, res: any, componentId: string)
       ? `Your night action has been recorded: you chose to ${verb} <@${targetId}>.`
       : 'Your night action has been recorded.';
 
-  res.send({
+  await res.send({
     type: InteractionResponseType.UPDATE_MESSAGE,
     data: {
       flags: InteractionResponseFlags.IS_COMPONENTS_V2,
@@ -203,7 +204,7 @@ export async function handleNightAction(req: any, res: any, componentId: string)
   void maybeResolveNight(gameId);
 }
 
-export async function handleDayVote(req: any, res: any, componentId: string): Promise<any> {
+export async function handleDayVote(req: Request, res: Response, componentId: string) {
   const gameId = componentId.replace('day_vote:', '');
   const game = await getGame(gameId);
 
@@ -292,7 +293,7 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
     });
   }
 
-  res.send({
+  await res.send({
     type: InteractionResponseType.UPDATE_MESSAGE,
     data: {
       flags: InteractionResponseFlags.IS_COMPONENTS_V2,
@@ -318,7 +319,7 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
   void maybeResolveDay(game.id);
 }
 
-export async function handleHunterShot(req: any, res: any, componentId: string): Promise<any> {
+export async function handleHunterShot(req: Request, res: Response, componentId: string) {
   const gameId = componentId.replace('hunter_shot:', '');
 
   const game = await getGame(gameId);

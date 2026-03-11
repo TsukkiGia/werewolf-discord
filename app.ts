@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
+import type { Request, Response } from 'express';
 import { InteractionType, InteractionResponseType, verifyKeyMiddleware } from 'discord-interactions';
 import { initDb } from './db.js';
 import { boss, registerWorkers } from './jobs/dayVoting.js';
@@ -27,7 +28,7 @@ await registerHunterShotTimeoutWorker((gameId, hunterId) => resolveHunterShot(ga
 const app = express();
 const PORT: number = Number(process.env.PORT) || 3000;
 
-type Handler = (req: any, res: any) => Promise<any>;
+type Handler = (req: Request, res: Response) => Promise<unknown>;
 
 const commandHandlers: Record<string, Handler> = {
   ww_create: handleWwCreate,
@@ -40,7 +41,7 @@ const commandHandlers: Record<string, Handler> = {
 app.post(
   '/interactions',
   verifyKeyMiddleware(process.env.PUBLIC_KEY as string),
-  async (req: any, res: any) => {
+  async (req: Request, res: Response) => {
     const { type, data } = req.body;
 
     if (type === InteractionType.PING) {

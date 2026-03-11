@@ -51,21 +51,27 @@ export async function DiscordRequest(
 
   // Handle Discord rate limits with basic retry & backoff.
   if (res.status === 429) {
-    let data: any = null;
+    let data: unknown = null;
     try {
       data = await res.json();
     } catch {
       // ignore JSON parsing errors; we'll fall back to a default delay
     }
-    const retryAfterSeconds =
-      data && typeof data.retry_after === 'number' ? data.retry_after : 1;
+    let retryAfterSeconds = 1;
+    if (typeof data === 'object' && data !== null && 'retry_after' in data) {
+      const retryAfter = (data as { retry_after?: unknown }).retry_after;
+      if (typeof retryAfter === 'number') {
+        retryAfterSeconds = retryAfter;
+      }
+    }
 
     if (retryCount < 3) {
       await sleep(retryAfterSeconds * 1000);
       return DiscordRequest(endpoint, options, retryCount + 1);
     }
 
-    throw new Error(JSON.stringify(data ?? { message: 'Rate limited' }));
+    const fallback = { message: 'Rate limited' };
+    throw new Error(JSON.stringify((data as object | null) ?? fallback));
   }
 
   // throw API errors

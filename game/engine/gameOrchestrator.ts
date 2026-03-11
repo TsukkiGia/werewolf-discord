@@ -53,6 +53,7 @@ import {
   arsonistFireAwayDeathLine,
   arsonistIgniteLine,
   deathSummary,
+  wolfKillDmLine,
 } from '../strings/narration.js';
 
 type NightDeathCause =
@@ -229,7 +230,7 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             doctorProtectingWolfDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
         break;
@@ -239,7 +240,7 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             harlotVisitWolfDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
         break;
@@ -249,7 +250,7 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             harlotVisitWolfVictimDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
         break;
@@ -259,7 +260,7 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             chemistSelfDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
         break;
@@ -269,7 +270,7 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             chemistTargetDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
         break;
@@ -279,7 +280,7 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             arsonistFireHomeDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
         break;
@@ -289,7 +290,7 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         if (victim) {
           lines.push(
             arsonistFireAwayDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment as any, victim.role)}.`,
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
           );
         }
         break;
@@ -374,6 +375,14 @@ async function resolveNightActionsAndCollectDeaths(params: {
         killedIds.push(id);
         await markPlayerDead(gameId, id);
         nightDeaths.push({ playerId: id, cause: 'wolf_kill' });
+        try {
+          const dmChannelId = await openDmChannel(id);
+          await postChannelMessage(dmChannelId, {
+            content: wolfKillDmLine(),
+          });
+        } catch (err) {
+          console.error('Failed to DM wolf kill victim', gameId, id, err);
+        }
       }
     }
   } else if (victimId && awayPlayerIds.has(victimId)) {
