@@ -12,6 +12,23 @@ import {
 } from '../strings/narration.js';
 import { addDousedTarget, clearDousedTargets, getDousedTargets } from '../../db/arsonist.js';
 
+async function safeDm(userId: string, content: string, context: string): Promise<void> {
+  try {
+    const dmChannelId = await openDmChannel(userId);
+    await postChannelMessage(dmChannelId, { content });
+  } catch (err) {
+    console.error(`Failed to DM ${context}`, userId, err);
+  }
+}
+
+function buildPlayersById(players: GamePlayerState[]): Map<string, GamePlayerState> {
+  const map = new Map<string, GamePlayerState>();
+  for (const p of players) {
+    map.set(p.user_id, p);
+  }
+  return map;
+}
+
 const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'potion', 'protect'];
 
 export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
@@ -34,13 +51,14 @@ export async function processSeerActions(
   players: GamePlayerState[],
   actions: NightActionRow[],
 ): Promise<void> {
+  const playersById = buildPlayersById(players);
   const inspectActions = actions.filter(
     (a) => a.action_kind === 'inspect' && a.target_id,
   );
 
   await Promise.all(
     inspectActions.map(async (action) => {
-      const target = players.find((p) => p.user_id === action.target_id);
+      const target = playersById.get(action.target_id as string);
       if (!target) return;
 
       const isWolf = target.alignment === 'wolf';
@@ -60,12 +78,7 @@ export async function processSeerActions(
         content = `Your vision reveals that <@${target.user_id}> is **${target.role}**.`;
       }
 
-      try {
-        const dmChannelId = await openDmChannel(action.actor_id);
-        await postChannelMessage(dmChannelId, { content });
-      } catch (err) {
-        console.error('Failed to DM seer inspection result', err);
-      }
+      await safeDm(action.actor_id, content, 'seer inspection result');
     }),
   );
 }
@@ -96,6 +109,7 @@ export async function processDoctorActions(
   killTargets: string[],
   killedIds: string[],
 ): Promise<DoctorActionResult> {
+  const playersById = buildPlayersById(players);
   const protectActions = actions.filter(
     (a) => a.action_kind === 'protect' && a.target_id,
   );
@@ -108,7 +122,7 @@ export async function processDoctorActions(
 
   await Promise.all(
     protectActions.map(async (action) => {
-      const target = players.find((p) => p.user_id === action.target_id);
+      const target = playersById.get(action.target_id as string);
       if (!target) return;
 
       const targetId = target.user_id;
@@ -127,15 +141,10 @@ export async function processDoctorActions(
           killedDoctorId = doctorId;
           doctorDeathInfo = { doctorId, wolfTargetId: targetId };
         }
-        const dmContent = doctorDies
+        const content = doctorDies
           ? `You tried to protect <@${targetId}>, but they were a wolf in disguise. They turned on you — you did not survive.`
           : `You tried to protect <@${targetId}>, but they were a wolf in disguise. They lunged for you, but you escaped with your life.`;
-        try {
-          const dmChannelId = await openDmChannel(doctorId);
-          await postChannelMessage(dmChannelId, { content: dmContent });
-        } catch (err) {
-          console.error('Failed to DM doctor wolf-protection result', err);
-        }
+        await safeDm(doctorId, content, 'doctor wolf-protection result');
         return;
       }
 
@@ -162,12 +171,7 @@ export async function processDoctorActions(
             ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
             : `You watched over <@${targetId}>. The night passed quietly.`;
 
-      try {
-        const dmChannelId = await openDmChannel(doctorId);
-        await postChannelMessage(dmChannelId, { content });
-      } catch (err) {
-        console.error('Failed to DM doctor protection result', err);
-      }
+      await safeDm(doctorId, content, 'doctor protection result');
     }),
   );
 
@@ -195,13 +199,14 @@ export async function processHarlotActions(
   wolfChosenVictimId: string | null,
   gameId: string,
 ): Promise<HarlotActionResult> {
+  const playersById = buildPlayersById(players);
   const killedHarlotIds: string[] = [];
   const harlotDeathInfos: { harlotId: string; targetId: string; cause: 'visited_wolf' | 'visited_victim' }[] = [];
 
   await Promise.all(
     visitActions.map(async (visit) => {
       const { harlotId, targetId } = visit;
-      const target = players.find((p) => p.user_id === targetId);
+      const target = playersById.get(targetId);
       if (!target) return;
 
       const visitedWolf = WOLF_PACK_ROLES.has(target.role as RoleName);
@@ -223,21 +228,11 @@ export async function processHarlotActions(
         dmContent = harlotSafeVisitLine(targetId);
       }
 
-      try {
-        const dmChannelId = await openDmChannel(harlotId);
-        await postChannelMessage(dmChannelId, { content: dmContent });
-      } catch (err) {
-        console.error('Failed to DM harlot visit result', err);
-      }
+      await safeDm(harlotId, dmContent, 'harlot visit result');
 
       // Notify the visited player (only on safe visits — dead players don't get DMs)
       if (!visitedWolf && !visitedWolfTarget) {
-        try {
-          const targetDmChannelId = await openDmChannel(targetId);
-          await postChannelMessage(targetDmChannelId, { content: harlotVisitNotificationLine() });
-        } catch (err) {
-          console.error('Failed to DM harlot visit notification to target', err);
-        }
+        await safeDm(targetId, harlotVisitNotificationLine(), 'harlot visit notification to target');
       }
     }),
   );
@@ -278,6 +273,7 @@ export async function processChemistActions(
   const duels: ChemistDuelInfo[] = [];
 
   const awayPlayerIds = buildAwayPlayerIds(actions);
+  const playersById = buildPlayersById(players);
 
   const chemists = players.filter((p) => p.is_alive && p.role === 'chemist');
   if (chemists.length === 0) {
@@ -297,7 +293,7 @@ export async function processChemistActions(
     );
     if (!action || !action.target_id) continue;
 
-    const target = players.find((p) => p.user_id === action.target_id);
+    const target = playersById.get(action.target_id);
     if (!target || !target.is_alive) continue;
 
     const chemistId = chemist.user_id;
@@ -305,14 +301,11 @@ export async function processChemistActions(
 
     // If the target is out for the night, the duel never happens.
     if (awayPlayerIds.has(targetId)) {
-      try {
-        const chemistDm = await openDmChannel(chemistId);
-        await postChannelMessage(chemistDm, {
-          content: `You went looking for <@${targetId}> to share your potions, but they were out for the night. Your vials stayed corked.`,
-        });
-      } catch (err) {
-        console.error('Failed to DM chemist about away target', err);
-      }
+      await safeDm(
+        chemistId,
+        `You went looking for <@${targetId}> to share your potions, but they were out for the night. Your vials stayed corked.`,
+        'chemist away-target result',
+      );
       continue;
     }
 
@@ -332,19 +325,8 @@ export async function processChemistActions(
       ? `The Chemist visited you for a late-night drink. You picked the safe potion — they took the poison and died.`
       : `The Chemist visited you for a late-night drink. You chose the wrong potion and died from the poison.`;
 
-    try {
-      const chemistDm = await openDmChannel(chemistId);
-      await postChannelMessage(chemistDm, { content: chemistContent });
-    } catch (err) {
-      console.error('Failed to DM chemist potion result', err);
-    }
-
-    try {
-      const targetDm = await openDmChannel(targetId);
-      await postChannelMessage(targetDm, { content: targetContent });
-    } catch (err) {
-      console.error('Failed to DM chemist target potion result', err);
-    }
+    await safeDm(chemistId, chemistContent, 'chemist potion result');
+    await safeDm(targetId, targetContent, 'chemist target potion result');
   }
 
   return { killedIds: killedByChemist, duels };
@@ -447,14 +429,11 @@ export async function processArsonistActions(
   // Otherwise this night is a douse.
   if (action.target_id) {
     await addDousedTarget(gameId, action.target_id);
-    try {
-      const dmChannelId = await openDmChannel(arsonist.user_id);
-      await postChannelMessage(dmChannelId, {
-        content: `You quietly drenched <@${action.target_id}>’s house in kerosene. It will stay primed until you choose to ignite.`,
-      });
-    } catch (err) {
-      console.error('Failed to DM arsonist douse result', err);
-    }
+    await safeDm(
+      arsonist.user_id,
+      `You quietly drenched <@${action.target_id}>’s house in kerosene. It will stay primed until you choose to ignite.`,
+      'arsonist douse result',
+    );
   }
 
   return { killedIds: [], burnedVictims: [] };
