@@ -319,6 +319,33 @@ export function arsonistIgniteLine(): string {
   return pickRandom(variants);
 }
 
+export function alphaWolfTurnedYouLine(packMentions: string): string {
+  const variants = [
+    `Fangs tear into you — but instead of fading, your heartbeat roars louder. You rise with new hunger. You are now a **WEREWOLF**. Your pack: ${packMentions}.`,
+    `You collapse beneath the Alpha's bite, certain it's the end. Then the darkness fills with snarls that feel like home. You are now part of the wolf pack. Your pack: ${packMentions}.`,
+    `The Alpha's jaws close on you and the world goes red. When your vision clears, you are no villager anymore. You are a wolf. Your pack: ${packMentions}.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function alphaWolfTurnedPackLine(newWolfId: string): string {
+  const variants = [
+    `You feel the Alpha's curse spread through the night. <@${newWolfId}> is no longer prey — they have joined your pack.`,
+    `A new howl joins the chorus. The Alpha's bite has turned <@${newWolfId}> into one of you.`,
+    `The pack grows. <@${newWolfId}> was bitten and is now a wolf. Welcome them to the hunt.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function alphaWolfBiteChannelLine(): string {
+  const variants = [
+    "The Alpha Wolf's curse found a new host last night. Not everyone woke up the same.",
+    "A dark blessing passed through the village. One who slept a villager rose a wolf.",
+    "The Alpha Wolf's ancient curse took root. Someone has joined the pack.",
+  ];
+  return pickRandom(variants);
+}
+
 export function finalRolesLines(players: GamePlayerState[]): string[] {
   const roleLines =
     players.length > 0

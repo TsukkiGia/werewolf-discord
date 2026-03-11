@@ -5,8 +5,11 @@ export const AlphaWolfRole: RoleDefinition = {
   name: 'alpha_wolf',
   alignment: 'wolf',
   description:
-    'Leads the wolf pack and hunts each night, identical to a standard werewolf. ' +
-    'Appears as an ordinary villager when inspected by the Seer — the Alpha\'s true nature is hidden. ' +
+    'The origin of the curse, the bane of banes. Leads the wolf pack and hunts each night like a standard werewolf. ' +
+    'Each night there is a 20% chance the pack\'s chosen kill target is bitten and turns into a werewolf instead of dying — they join the pack immediately. ' +
+    'The bite cannot trigger if the target is away from home, protected by the doctor, or already wolf-aligned. ' +
+    'The bitten player is told their new role and packmates via DM; the pack is notified; ' +
+    'the channel learns someone was turned but not who. ' +
     'Wolves know the identities of all other wolf pack members at game start.',
   unique: true,
   nightAction: {

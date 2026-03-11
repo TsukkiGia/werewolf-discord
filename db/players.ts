@@ -1,6 +1,6 @@
 import { pool } from './client.js';
 import { assignRolesForPlayerIds } from '../game/engine/assignRoles.js';
-import type { AssignedRole, Alignment } from '../game/types.js';
+import type { AssignedRole, Alignment, RoleName } from '../game/types.js';
 
 export async function addPlayer(gameId: string, userId: string): Promise<void> {
   const joinedAt = Date.now();
@@ -95,5 +95,22 @@ export async function markPlayerDead(gameId: string, userId: string): Promise<vo
     WHERE game_id = $1 AND user_id = $2
     `,
     [gameId, userId],
+  );
+}
+
+export async function setPlayerRoleAndAlignment(
+  gameId: string,
+  userId: string,
+  role: RoleName,
+  alignment: Alignment,
+): Promise<void> {
+  await pool.query(
+    `
+    UPDATE game_players
+    SET role = $1,
+        alignment = $2
+    WHERE game_id = $3 AND user_id = $4
+    `,
+    [role, alignment, gameId, userId],
   );
 }

@@ -3,6 +3,7 @@ import {
   getPlayersForGame,
   getNightActionsForNight,
   markPlayerDead,
+  setPlayerRoleAndAlignment,
   advancePhase,
   endGame,
   getVotesForDay,
@@ -60,6 +61,9 @@ import {
   arsonistIgniteLine,
   deathSummary,
   wolfKillDmLine,
+  alphaWolfTurnedYouLine,
+  alphaWolfTurnedPackLine,
+  alphaWolfBiteChannelLine,
   wolfCubDeathPackLine,
 } from '../strings/narration.js';
 
@@ -84,6 +88,7 @@ interface NightActionResolutionOutcome {
   killedIds: string[];
   nightDeaths: NightDeathInfo[];
   doctorSavedSomeone: boolean;
+  biteConvertedId: string | null;
 }
 
 /** DM all alive players their night-action prompts and schedule the night timeout. */
@@ -146,6 +151,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       killedIds,
       nightDeaths,
       doctorSavedSomeone,
+      biteConvertedId,
     } = await resolveNightActionsAndCollectDeaths({
       gameId,
       nightNumber,
@@ -202,6 +208,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
           updatedPlayers,
           doctorSavedSomeone,
         );
+        if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
         lines.push(hunterResolveLine());
         try {
           await postChannelMessage(game.channel_id, { content: lines.join('\n') });
@@ -222,6 +229,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
         updatedPlayers,
         doctorSavedSomeone,
       );
+      if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
 
       if (win) {
         lines.push(...buildWinLines(win));
@@ -417,6 +425,10 @@ async function resolveNightActionsAndCollectDeaths(params: {
 
   const killedIds: string[] = [];
   const nightDeaths: NightDeathInfo[] = [];
+  let biteConvertedId: string | null = null;
+
+  const alphaWolfAlive = players.some((p) => p.role === 'alpha_wolf' && p.is_alive);
+  const playersById = new Map(players.map((p) => [p.user_id, p]));
 
   for (const targetId of wolfChosenVictims) {
     if (awayPlayerIds.has(targetId)) {
@@ -474,6 +486,48 @@ async function resolveNightActionsAndCollectDeaths(params: {
       } catch (err) {
         console.error('Failed to DM doctor-saved target result', err);
       }
+      continue;
+    }
+
+    // Alpha Wolf bite: 20% chance to convert the primary target instead of killing.
+    // Only applies to the first chosen victim, and only to non-wolf-aligned players.
+    if (
+      targetId === wolfChosenVictims[0] &&
+      alphaWolfAlive &&
+      biteConvertedId === null &&
+      playersById.get(targetId)?.alignment !== 'wolf' &&
+      Math.random() < 0.2
+    ) {
+      await setPlayerRoleAndAlignment(gameId, targetId, 'werewolf', 'wolf');
+      biteConvertedId = targetId;
+
+      // Tell the turned player who their new packmates are.
+      const packMates = players.filter(
+        (p) => p.is_alive && WOLF_PACK_ROLES.has(p.role as RoleName) && p.user_id !== targetId,
+      );
+      const packMentions = packMates.length > 0
+        ? packMates.map((p) => `<@${p.user_id}>`).join(', ')
+        : 'none — you stand alone';
+
+      try {
+        const dmChannelId = await openDmChannel(targetId);
+        await postChannelMessage(dmChannelId, { content: alphaWolfTurnedYouLine(packMentions) });
+      } catch (err) {
+        console.error('Failed to DM newly turned wolf', gameId, targetId, err);
+      }
+
+      // Tell the existing pack a new wolf has joined.
+      await Promise.all(
+        packMates.map(async (wolf) => {
+          try {
+            const dmChannelId = await openDmChannel(wolf.user_id);
+            await postChannelMessage(dmChannelId, { content: alphaWolfTurnedPackLine(targetId) });
+          } catch (err) {
+            console.error('Failed to DM pack about new wolf', gameId, wolf.user_id, err);
+          }
+        }),
+      );
+
       continue;
     }
 
@@ -603,7 +657,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
   // Refresh player state post-kills
   const updatedPlayers = await getPlayersForGame(gameId);
 
-  return { updatedPlayers, killedIds, nightDeaths, doctorSavedSomeone };
+  return { updatedPlayers, killedIds, nightDeaths, doctorSavedSomeone, biteConvertedId };
 }
 
 /**
