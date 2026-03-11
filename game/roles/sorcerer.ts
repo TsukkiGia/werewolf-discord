@@ -4,7 +4,13 @@ export const SorcererRole: RoleDefinition = {
   name: 'sorcerer',
   alignment: 'wolf',
   description:
-    'A wolf-aligned information role that can learn whether a player is a wolf, the seer, or neither.',
+    'Wolf-aligned spy who inspects one player per night. Gets a three-category result: ' +
+    '"wolf-aligned", "the Seer", or "neither" — less precise than the Seer\'s exact role reveal. ' +
+    'The Sorcerer is counted as wolf-aligned for win conditions and Seer inspections ' +
+    '(a Seer who inspects the Sorcerer sees "sorcerer"). ' +
+    'Does NOT count as a wolf pack member: doctor retaliation does not trigger when the doctor protects the Sorcerer, ' +
+    'and the Sorcerer does not participate in the pack kill vote. ' +
+    'Wins with the wolves.',
   unique: true,
   minPlayers: 9,
   nightAction: {

@@ -5,8 +5,9 @@ export const AlphaWolfRole: RoleDefinition = {
   name: 'alpha_wolf',
   alignment: 'wolf',
   description:
-    'The pack leader who hunts alongside the other wolves. ' +
-    'In a future version, the Alpha Wolf will have a chance to convert a villager into a wolf instead of killing them.',
+    'Leads the wolf pack and hunts each night, identical to a standard werewolf. ' +
+    'Appears as an ordinary villager when inspected by the Seer — the Alpha\'s true nature is hidden. ' +
+    'Wolves know the identities of all other wolf pack members at game start.',
   unique: true,
   nightAction: {
     kind: 'kill',

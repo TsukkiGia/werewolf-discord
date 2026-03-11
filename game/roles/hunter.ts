@@ -3,7 +3,11 @@ import type { RoleDefinition, RoleIntroContext } from '../types.js';
 export const HunterRole: RoleDefinition = {
   name: 'hunter',
   alignment: 'town',
-  description: 'A town-aligned role that can shoot one player when eliminated.',
+  description:
+    'No night action. When eliminated by any means (wolf kill or day lynch), ' +
+    'the Hunter is immediately given the option to shoot one player, who also dies. ' +
+    'The Hunter may also pass and shoot no one. ' +
+    'The shot resolves before the next phase begins and win conditions are re-evaluated after the shot.',
   unique: true,
   minPlayers: 6,
   nightAction: {

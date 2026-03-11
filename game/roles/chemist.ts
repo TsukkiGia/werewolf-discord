@@ -4,7 +4,13 @@ export const ChemistRole: RoleDefinition = {
   name: 'chemist',
   alignment: 'town',
   description:
-    'A crazy villager who brews dangerous potions. On certain nights they can share their brews with another player, and one of them will die from the poison.',
+    'Acts on odd-numbered nights only (1, 3, 5, …). Chooses a target to share potions with. ' +
+    'If the target is away from home, the duel is cancelled and the Chemist is told the house was empty. ' +
+    'If the target is home, a 50/50 coin flip determines who drinks the poison — ' +
+    'the Chemist or the target. The loser dies; both players are DMed the outcome immediately. ' +
+    'Doctor protection does not apply to chemist deaths. ' +
+    'The Chemist is marked as away while performing their action, so wolves cannot kill them at home on action nights. ' +
+    'Town-aligned; wins with the town.',
   unique: true,
   minPlayers: 7,
   nightAction: {

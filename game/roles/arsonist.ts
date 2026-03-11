@@ -4,7 +4,14 @@ export const ArsonistRole: RoleDefinition = {
   name: 'arsonist',
   alignment: 'neutral',
   description:
-    'A lone neutral who drenches houses in kerosene. Each night they may douse a house, and later ignite all doused houses in one inferno.',
+    'Neutral faction. Each night: choose to douse a player\'s house (adds to a persistent list) ' +
+    'or, if at least one house is already doused, ignite all of them at once. ' +
+    'Ignition kills everyone in or visiting a doused house — the occupant (whether home or away), ' +
+    'plus any visitors whose night action targeted that house (doctor, harlot, chemist, etc.). ' +
+    'Doctor protection does not block arsonist fire. ' +
+    'The doused list persists across nights and is cleared after ignition. ' +
+    'Win condition: must be the very last player alive (sole survivor). ' +
+    'Does not win alongside the wolf team — all other players must be dead.',
   unique: true,
   minPlayers: 9,
   nightAction: {

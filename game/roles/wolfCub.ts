@@ -5,8 +5,10 @@ export const WolfCubRole: RoleDefinition = {
   name: 'wolf_cub',
   alignment: 'wolf',
   description:
-    'A young wolf who hunts alongside the pack. ' +
-    'In a future version, the pack will get an extra kill the night after the Wolf Cub dies.',
+    'Hunts alongside the pack each night, identical to a standard werewolf. ' +
+    'When the Wolf Cub is eliminated, the pack gets an extra kill on the following night — ' +
+    'they may choose two targets instead of one. ' +
+    'Wolves know the identities of all other wolf pack members at game start.',
   unique: true,
   nightAction: {
     kind: 'kill',

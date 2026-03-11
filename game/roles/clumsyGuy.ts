@@ -4,7 +4,10 @@ export const ClumsyGuyRole: RoleDefinition = {
   name: 'clumsy_guy',
   alignment: 'town',
   description:
-    'A townsperson who partied a little too hard. During the day, they have a 50% chance for their lynch vote to land on a random player instead of their intended target.',
+    'No night action. During the day vote, the Clumsy Guy has a 50% chance of misfiring: ' +
+    'their vote is silently redirected to a random alive player other than their intended target. ' +
+    'The Clumsy Guy is not told when their vote misfires. ' +
+    'Added to games with ~40% probability after the power budget is spent (min 6 players).',
   minPlayers: 6,
   unique: true,
   nightAction: {

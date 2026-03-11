@@ -4,7 +4,10 @@ export const MasonRole: RoleDefinition = {
   name: 'mason',
   alignment: 'town',
   description:
-    'A townsperson who is part of a secret group. Masons know who the other masons are.',
+    'A townsperson who belongs to a secret brotherhood. ' +
+    'At game start all masons are revealed to each other via DM — confirmed town trust with no night action needed. ' +
+    'Always assigned in pairs; the setup generator never includes an odd number of masons. ' +
+    'Appears as "mason" when inspected by the Seer.',
   minPlayers: 8,
   nightAction: {
     kind: 'none',

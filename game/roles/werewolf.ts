@@ -4,7 +4,12 @@ import { WOLF_PACK_ROLES } from '../types.js';
 export const WerewolfRole: RoleDefinition = {
   name: 'werewolf',
   alignment: 'wolf',
-  description: 'A werewolf who hunts at night and tries to avoid suspicion during the day.',
+  description:
+    'Hunts with the wolf pack each night. The pack collectively submits a kill target via DM; ' +
+    'if they disagree, a random vote from the pack is chosen. ' +
+    'The kill is wasted if the chosen target is away from home that night, or if the target is protected by a doctor. ' +
+    'Wolves know the identities of all other wolf pack members at game start. ' +
+    'Wolves win when the number of alive wolves is greater than or equal to the number of alive town-aligned players.',
   nightAction: {
     kind: 'kill',
     target: 'player',

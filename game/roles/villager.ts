@@ -3,7 +3,10 @@ import type { RoleDefinition, RoleIntroContext } from '../types.js';
 export const VillagerRole: RoleDefinition = {
   name: 'villager',
   alignment: 'town',
-  description: 'An ordinary townsperson with no special powers. Tries to find and eliminate the werewolves.',
+  description:
+    'An ordinary townsperson with no special powers. ' +
+    'Participates in the day vote to lynch suspected wolves. ' +
+    'Town wins when all wolf-aligned players are eliminated.',
   nightAction: {
     kind: 'none',
     target: 'none',

@@ -3,7 +3,11 @@ import type { RoleDefinition, RoleIntroContext } from '../types.js';
 export const SeerRole: RoleDefinition = {
   name: 'seer',
   alignment: 'town',
-  description: 'A town-aligned role that can learn the exact role of another player at night.',
+  description:
+    'Inspects one player each night and learns their exact role (e.g. "werewolf", "doctor", "sorcerer"). ' +
+    'Inspection reveals the role name directly, not just alignment — ' +
+    'so the Seer sees through the Alpha Wolf\'s disguise and correctly identifies the Sorcerer as "sorcerer". ' +
+    'Results are DMed at dawn after night resolution.',
   unique: true,
   minPlayers: 5,
   nightAction: {

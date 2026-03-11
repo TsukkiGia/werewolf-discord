@@ -4,7 +4,12 @@ export const HarlotRole: RoleDefinition = {
   name: 'harlot',
   alignment: 'town',
   description:
-    'A town-aligned role that visits another player each night. Visiting a wolf or the wolf\'s target is fatal, but being away means the wolf cannot kill you at home.',
+    'Visits one player each night. Being away from home means wolves cannot kill the Harlot at their own house that night. ' +
+    'Fatal outcomes: visiting a wolf pack member (werewolf/wolf_cub/alpha_wolf), ' +
+    'or visiting the player the wolves chose to kill (even if the doctor saved that player). ' +
+    'Safe visit: Harlot is told the visited player "was not a wolf"; ' +
+    'the visited player is also notified that someone came by. ' +
+    'The Harlot\'s survival depends on who they visit, not whether that player is home.',
   unique: true,
   minPlayers: 6,
   nightAction: {
