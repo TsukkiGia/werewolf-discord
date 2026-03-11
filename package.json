@@ -3,12 +3,6 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {
-    "build": "tsc",
-    "start": "npm run build && node dist/app.js",
-    "register": "npm run build && node dist/commands.js",
-    "dev": "nodemon --watch . --ext ts --ignore dist --ignore node_modules --exec \"npm run build && node dist/app.js\""
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TsukkiGia/werewolf-discord.git"
@@ -25,7 +19,8 @@
     "@types/express": "^5.0.6",
     "@types/node": "^25.3.5",
     "@types/pg": "^8.18.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.0"
   },
   "dependencies": {
     "discord-interactions": "^4.4.0",
@@ -34,5 +29,12 @@
     "pg": "^8.20.0",
     "pg-boss": "^12.14.0",
     "tweetnacl": "^1.0.3"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && node dist/app.js",
+    "register": "npm run build && node dist/commands.js",
+    "dev": "nodemon --watch . --ext ts --ignore dist --ignore node_modules --exec \"npm run build && node dist/app.js\"",
+    "test": "vitest"
   }
 }

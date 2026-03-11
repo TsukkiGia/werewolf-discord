@@ -12,7 +12,7 @@ import {
   hasNightAction,
   hasDayVote,
 } from '../db.js';
-import { DiscordRequest } from '../utils.js';
+import { postChannelMessage } from '../utils.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
 import { getInteractionUserId } from '../interactionHelpers.js';
 import { maybeResolveNight, maybeResolveDay } from '../game/engine/gameOrchestrator.js';
@@ -229,9 +229,8 @@ export async function handleDayVote(req: any, res: any, componentId: string): Pr
 
   if (game.channel_id) {
     try {
-      await DiscordRequest(`channels/${game.channel_id}/messages`, {
-        method: 'POST',
-        body: { content: `<@${actorId}> votes to lynch <@${targetId}>.` },
+      await postChannelMessage(game.channel_id, {
+        content: `<@${actorId}> votes to lynch <@${targetId}>.`,
       });
     } catch (err) {
       console.error('Failed to send day vote announcement', err);
