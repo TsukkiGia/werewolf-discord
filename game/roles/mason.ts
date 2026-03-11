@@ -5,6 +5,7 @@ export const MasonRole: RoleDefinition = {
   alignment: 'town',
   description:
     'A townsperson who is part of a secret group. Masons know who the other masons are.',
+  minPlayers: 8,
   nightAction: {
     kind: 'none',
     target: 'none',

@@ -6,6 +6,7 @@ export const HarlotRole: RoleDefinition = {
   description:
     'A town-aligned role that visits another player each night. Visiting a wolf or the wolf\'s target is fatal, but being away means the wolf cannot kill you at home.',
   unique: true,
+  minPlayers: 6,
   nightAction: {
     kind: 'visit',
     target: 'player',

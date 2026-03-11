@@ -1,78 +1,113 @@
 import { describe, it, expect } from 'vitest';
 import { chooseSetup } from '../game/balancing/chooseSetup.js';
 import { ROLE_REGISTRY } from '../game/balancing/roleRegistry.js';
+import { WOLF_PACK_ROLES } from '../game/types.js';
 import type { RoleName } from '../game/types.js';
 import { BUCKET_CONFIGS } from '../game/balancing/buckets.js';
 
-function summarizeBuckets(roles: RoleName[]) {
+function summarize(roles: RoleName[]) {
   const buckets: Record<string, number> = {};
   const alignments: Record<string, number> = {};
+  let wolves = 0;
+  let neutrals = 0;
 
   for (const role of roles) {
     const def = ROLE_REGISTRY[role];
     const bucket = BUCKET_CONFIGS.find((b) => b.roles.includes(role))?.id ?? 'unknown';
     buckets[bucket] = (buckets[bucket] ?? 0) + 1;
     alignments[def.alignment] = (alignments[def.alignment] ?? 0) + 1;
+    if (WOLF_PACK_ROLES.has(role)) wolves += 1;
+    if (def.alignment === 'neutral') neutrals += 1;
   }
 
-  return { buckets, alignments };
+  return { buckets, alignments, wolves, neutrals };
 }
 
 describe('chooseSetup', () => {
   it('returns exactly playerCount roles', () => {
-    for (let n = 1; n <= 10; n += 1) {
+    for (let n = 1; n <= 15; n += 1) {
       const roles = chooseSetup(n);
       expect(roles).toHaveLength(n);
     }
   });
 
-  it('includes at least one wolf-aligned role when there are 3+ players', () => {
-    for (let n = 3; n <= 10; n += 1) {
+  it('includes at least one wolf pack role for 3+ players', () => {
+    for (let n = 3; n <= 15; n += 1) {
       const roles = chooseSetup(n);
-      const { alignments } = summarizeBuckets(roles);
-      expect(alignments.wolf ?? 0).toBeGreaterThanOrEqual(1);
+      const { wolves } = summarize(roles);
+      expect(wolves).toBeGreaterThanOrEqual(1);
     }
   });
 
-  it('uses expected bucket counts for small games', () => {
-    const roles3 = chooseSetup(3);
-    const s3 = summarizeBuckets(roles3);
-    expect(roles3).toHaveLength(3);
-    // 3 players: 1 wolf_core, 1 protect (doctor >= 3), rest village_core.
-    expect(s3.buckets.wolf_core ?? 0).toBe(1);
-    expect(s3.buckets.village_power_info ?? 0).toBe(0);
-    expect(s3.buckets.village_power_protect ?? 0).toBe(1);
-
-    const roles4 = chooseSetup(4);
-    const s4 = summarizeBuckets(roles4);
-    expect(roles4).toHaveLength(4);
-    // 4 players: 1 wolf_core, 1 info, 1 protect, rest village_core.
-    expect(s4.buckets.wolf_core ?? 0).toBe(1);
-    expect(s4.buckets.village_power_info ?? 0).toBe(1);
-    expect(s4.buckets.village_power_protect ?? 0).toBe(1);
-
-    const roles5 = chooseSetup(5);
-    const s5 = summarizeBuckets(roles5);
-    expect(roles5).toHaveLength(5);
-    // 5 players: 1 wolf_core, 1 info, 1 protect, rest village_core.
-    expect(s5.buckets.wolf_core ?? 0).toBe(1);
-    expect(s5.buckets.village_power_info ?? 0).toBe(1);
-    expect(s5.buckets.village_power_protect ?? 0).toBe(1);
+  it('wolf count scales with player count (Math.ceil(n/5), min 1)', () => {
+    // ≤5 → 1 wolf
+    for (let n = 1; n <= 5; n += 1) {
+      const { wolves } = summarize(chooseSetup(n));
+      expect(wolves).toBe(1);
+    }
+    // 6–10 → 2 wolves
+    for (let n = 6; n <= 10; n += 1) {
+      const { wolves } = summarize(chooseSetup(n));
+      expect(wolves).toBe(2);
+    }
+    // 11–15 → 3 wolves
+    for (let n = 11; n <= 15; n += 1) {
+      const { wolves } = summarize(chooseSetup(n));
+      expect(wolves).toBe(3);
+    }
   });
 
-  it('scales wolves up for larger games', () => {
-    const roles7 = chooseSetup(7);
-    const s7 = summarizeBuckets(roles7);
-    expect(s7.buckets.wolf_core ?? 0).toBe(2);
+  it('respects minPlayers thresholds for power roles', () => {
+    // At 4 players: seer/doctor/hunter require 5+/5+/6+, so none should appear.
+    for (let i = 0; i < 10; i += 1) {
+      const roles = chooseSetup(4);
+      expect(roles).not.toContain('seer');
+      expect(roles).not.toContain('doctor');
+      expect(roles).not.toContain('hunter');
+    }
 
-    // 10 players: Math.ceil(10/5) = 2 wolves
-    const roles10 = chooseSetup(10);
-    const s10 = summarizeBuckets(roles10);
-    expect(s10.buckets.wolf_core ?? 0).toBe(2);
+    // At 5 players: seer and doctor are the only eligible power roles.
+    // Budget 3.0 → both should always be selected.
+    for (let i = 0; i < 20; i += 1) {
+      const roles = chooseSetup(5);
+      expect(roles).toContain('seer');
+      expect(roles).toContain('doctor');
+    }
+  });
 
-    // 11 players: Math.ceil(11/5) = 3 wolves
-    const roles11 = chooseSetup(11);
-    const s11 = summarizeBuckets(roles11);
-    expect(s11.buckets.wolf_core ?? 0).toBe(3);
+  it('never includes a neutral role below 8 players', () => {
+    for (let n = 1; n <= 7; n += 1) {
+      for (let i = 0; i < 20; i += 1) {
+        const { neutrals } = summarize(chooseSetup(n));
+        expect(neutrals).toBe(0);
+      }
+    }
+  });
+
+  it('masons always come in pairs when present', () => {
+    for (let n = 5; n <= 15; n += 1) {
+      for (let i = 0; i < 10; i += 1) {
+        const roles = chooseSetup(n);
+        const masonCount = roles.filter((r) => r === 'mason').length;
+        expect(masonCount % 2).toBe(0);
+      }
+    }
+  });
+
+  it('sorcerer only appears at 9+ players (requires 2+ wolves)', () => {
+    for (let n = 1; n <= 8; n += 1) {
+      for (let i = 0; i < 10; i += 1) {
+        expect(chooseSetup(n)).not.toContain('sorcerer');
+      }
+    }
+  });
+
+  it('all role names in the setup are valid', () => {
+    for (let n = 1; n <= 15; n += 1) {
+      const roles = chooseSetup(n);
+      for (const role of roles) {
+        expect(ROLE_REGISTRY[role]).toBeDefined();
+      }
+    }
   });
 });

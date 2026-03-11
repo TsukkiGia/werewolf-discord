@@ -6,6 +6,7 @@ export const ChemistRole: RoleDefinition = {
   description:
     'A crazy villager who brews dangerous potions. On certain nights they can share their brews with another player, and one of them will die from the poison.',
   unique: true,
+  minPlayers: 7,
   nightAction: {
     kind: 'potion',
     target: 'player',

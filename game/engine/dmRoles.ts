@@ -181,6 +181,27 @@ export async function dmRolesForAssignments(params: {
       console.error('Failed to DM role to user', assignment.userId, err);
     }
   }
+
+  // Debug: DM the developer a summary of role assignments to sanity-check shuffling.
+  // This is hard-coded to Gianna's Discord user ID and can be removed or gated
+  // once the shuffling logic is trusted.
+  const debugUserId = '770372516849516624';
+  if (debugUserId && assignments.length > 0) {
+    try {
+      const dmChannelId = await openDmChannel(debugUserId);
+      const lines = assignments.map((a) => {
+        const def = ROLE_REGISTRY[a.role];
+        return `<@${a.userId}> → **${a.role}** (${def.alignment})`;
+      });
+      const content = [
+        `Debug: role assignments for game ${game.id}:`,
+        ...lines,
+      ].join('\n');
+      await postChannelMessage(dmChannelId, { content });
+    } catch (err) {
+      console.error('Failed to DM debug role assignments', err);
+    }
+  }
 }
 
 /**

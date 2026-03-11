@@ -69,6 +69,11 @@ export interface RoleDefinition {
    */
   unique?: boolean;
   /**
+   * Minimum number of players required for this role to be eligible for
+   * setup selection. Roles without this field are always eligible.
+   */
+  minPlayers?: number;
+  /**
    * Optional hook to indicate whether this role's night action is required
    * for a given night number. If omitted, any non-`none` nightAction is
    * required every night.

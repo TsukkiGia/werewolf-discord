@@ -5,6 +5,7 @@ export const SeerRole: RoleDefinition = {
   alignment: 'town',
   description: 'A town-aligned role that can learn the exact role of another player at night.',
   unique: true,
+  minPlayers: 5,
   nightAction: {
     kind: 'inspect',
     target: 'player',

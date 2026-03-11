@@ -5,6 +5,8 @@ export const ClumsyGuyRole: RoleDefinition = {
   alignment: 'town',
   description:
     'A townsperson who partied a little too hard. During the day, they have a 50% chance for their lynch vote to land on a random player instead of their intended target.',
+  minPlayers: 6,
+  unique: true,
   nightAction: {
     kind: 'none',
     target: 'none',

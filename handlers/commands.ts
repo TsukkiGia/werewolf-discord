@@ -260,6 +260,21 @@ export async function handleWwStart(req: any, res: any): Promise<any> {
       }
     } catch (err) {
       console.error('Error running start-game side effects', game.id, err);
+      if (game.channel_id) {
+        try {
+          await postChannelMessage(game.channel_id, {
+            content:
+              '⚠️ Failed to generate a valid role setup for this game. The game has been ended — please start a new one.',
+          });
+        } catch (msgErr) {
+          console.error('Failed to send setup-failure message', msgErr);
+        }
+      }
+      try {
+        await endGame(game.id);
+      } catch (endErr) {
+        console.error('Failed to end game after setup failure', endErr);
+      }
     }
   })();
 

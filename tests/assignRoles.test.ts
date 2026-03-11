@@ -27,8 +27,8 @@ describe('assignRolesForPlayerIds', () => {
   });
 
   it('sorcerer gets wolf alignment (regression: was hardcoded to town)', () => {
-    // Sorcerer appears at 7+ players; run many times to ensure it appears.
-    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'];
+    // Sorcerer appears at 9+ players (requires wolfCount >= 2 and minPlayers 9).
+    const ids = ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10'];
     let found = false;
 
     for (let i = 0; i < 50; i++) {

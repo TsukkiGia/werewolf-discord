@@ -5,6 +5,7 @@ export const DoctorRole: RoleDefinition = {
   alignment: 'town',
   description: 'A town-aligned role that can protect a player from being eliminated at night.',
   unique: true,
+  minPlayers: 5,
   nightAction: {
     kind: 'protect',
     target: 'player',

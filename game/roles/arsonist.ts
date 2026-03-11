@@ -6,6 +6,7 @@ export const ArsonistRole: RoleDefinition = {
   description:
     'A lone neutral who drenches houses in kerosene. Each night they may douse a house, and later ignite all doused houses in one inferno.',
   unique: true,
+  minPlayers: 9,
   nightAction: {
     kind: 'potion',
     target: 'player',
