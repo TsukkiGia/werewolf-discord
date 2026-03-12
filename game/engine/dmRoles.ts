@@ -11,6 +11,7 @@ import { recordNightActionPrompt } from '../../db/nightActions.js';
 import { getDousedTargets } from '../../db/arsonist.js';
 import { getCultMemberIds, addCultMember } from '../../db/cult.js';
 import { recordDayVotePrompt, getDayVotePrompts } from '../../db/dayVotePrompts.js';
+import { hasDayVote } from '../../db/votes.js';
 import { logEvent } from '../../logging.js';
 
 const NIGHT_PASS_SENTINEL = '__NIGHT_PASS__';
@@ -510,14 +511,25 @@ export async function dmDayVotePrompts(params: {
 }
 
 /**
- * Edit all day-vote DM messages for the given day to replace the select
- * menu with a "Voting has ended" notice, so stale prompts can't be used.
+ * Edit day-vote DM messages for the given day/round to replace the select
+ * menu with a "Voting has ended" notice for players who did not vote,
+ * so stale prompts can't be used while preserving vote history for voters.
  */
-export async function disableDayVotePrompts(gameId: string, day: number): Promise<void> {
+export async function disableDayVotePrompts(
+  gameId: string,
+  day: number,
+  round?: number,
+): Promise<void> {
   const prompts = await getDayVotePrompts(gameId, day);
   await Promise.all(
     prompts.map(async (p) => {
       try {
+        if (round != null) {
+          const alreadyVoted = await hasDayVote(gameId, day, round, p.user_id);
+          if (alreadyVoted) {
+            return;
+          }
+        }
         await patchChannelMessage(p.channel_id, p.message_id, {
           flags: InteractionResponseFlags.IS_COMPONENTS_V2,
           components: [

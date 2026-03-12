@@ -878,8 +878,9 @@ export async function maybeResolveDay(
     }
     if (!claimed) return;
 
-    // Disable stale vote DMs so players can't vote after the phase ends.
-    disableDayVotePrompts(gameId, dayCtx.dayNumber).catch((err) =>
+    // Disable stale vote DMs so players who did not vote this round can't use them,
+    // while preserving vote history for players who already cast a vote.
+    disableDayVotePrompts(gameId, dayCtx.dayNumber, dayCtx.round).catch((err) =>
       console.error('Failed to disable day vote prompts', err),
     );
 
