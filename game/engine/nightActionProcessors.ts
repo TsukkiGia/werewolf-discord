@@ -349,6 +349,9 @@ export async function processChemistActions(
     const chemistId = chemist.user_id;
     const targetId = target.user_id;
 
+    // If the target was already killed earlier this same night, skip the duel.
+    if (killedIds.includes(targetId)) continue;
+
     // If the target is out for the night, the duel never happens.
     if (awayPlayerIds.has(targetId)) {
       await safeDm(chemistId, chemistAwayTargetDmLine(targetId), 'chemist away-target result');
@@ -389,10 +392,11 @@ export interface ArsonistActionResult {
  * - On a "douse" night, the Arsonist targets a player and their house is added
  *   to the persistent doused set for the game.
  * - On an "ignite" night, the Arsonist targets the special value "__ARSONIST_IGNITE__".
- *   All doused houses are burned, killing the occupants and any visitors:
- *   - The doused player themselves.
- *   - Any doctors protecting that player.
- *   - Any visitors whose action targets that player.
+ *   All doused houses are burned, killing the occupants and any physical visitors:
+ *   - The doused player themselves (whether home or away).
+ *   - Any harlot physically visiting that house (via 'visit' action).
+ *   Other roles that target a player (doctor protect, chemist potion, thief steal,
+ *   cultist convert, cult hunter hunt) are not counted as physically present.
  *
  * Doctor protection does not prevent arsonist kills.
  */
@@ -434,14 +438,12 @@ export async function processArsonistActions(
       const occupantOut = awayPlayerIds.has(houseId);
       burnedKinds.set(houseId, occupantOut ? 'occupant_away' : 'occupant_home');
 
+      // Only players physically at the house (harlot 'visit') count as collateral.
+      // Roles that target a player abstractly (doctor, chemist, thief, cultist,
+      // cult hunter) are not considered physically present in the house.
       for (const a of actions) {
         if (
-          (a.action_kind === 'protect' ||
-            a.action_kind === 'visit' ||
-            a.action_kind === 'potion' ||
-            a.action_kind === 'steal' ||
-            a.action_kind === 'convert' ||
-            a.action_kind === 'hunt') &&
+          AWAY_ACTION_KINDS.includes(a.action_kind) &&
           a.target_id === houseId
         ) {
           if (!burnedKinds.has(a.actor_id) && !killedIds.includes(a.actor_id)) {
@@ -559,6 +561,11 @@ export async function processCultistActions(
     else if (count === bestCount) { tie = true; }
   }
   if (tie || !chosenTarget) {
+    return { converted: false, backfiredVictimId: null, backfireTargetId: null };
+  }
+
+  // If the plurality target was already killed earlier this night, fail silently.
+  if (killedIds.includes(chosenTarget)) {
     return { converted: false, backfiredVictimId: null, backfireTargetId: null };
   }
 

@@ -26,13 +26,18 @@ vi.mock('../utils.js', () => ({
   postChannelMessage: postChannelMessageMock,
 }));
 
-// Track deaths without touching the real DB
+// Track deaths and role changes without touching the real DB
 const markPlayerDeadMock = vi.fn(
   (_gameId: string, _userId: string) => Promise.resolve(),
+);
+const setPlayerRoleAndAlignmentMock = vi.fn(
+  (_gameId: string, _userId: string, _role: string, _alignment: string) =>
+    Promise.resolve(),
 );
 
 vi.mock('../db/players.js', () => ({
   markPlayerDead: markPlayerDeadMock,
+  setPlayerRoleAndAlignment: setPlayerRoleAndAlignmentMock,
 }));
 
 // Arsonist DB helpers
@@ -52,7 +57,25 @@ vi.mock('../db/arsonist.js', () => ({
   clearDousedTargets: clearDousedTargetsMock,
 }));
 
-// Harlot narration helpers — keep them simple and observable
+// Cult DB helpers
+const addCultMemberMock = vi.fn(
+  (_gameId: string, _userId: string) => Promise.resolve(),
+);
+const getCultMemberIdsMock = vi.fn(
+  async (_gameId: string): Promise<string[]> => [],
+);
+const getNewestCultMemberIdMock = vi.fn(
+  async (_gameId: string): Promise<string | null> => null,
+);
+
+vi.mock('../db/cult.js', () => ({
+  addCultMember: addCultMemberMock,
+  getCultMemberIds: getCultMemberIdsMock,
+  getNewestCultMemberId: getNewestCultMemberIdMock,
+}));
+
+// Use real narration strings; only replace harlot functions with observable mocks
+// so we can assert which variant was called in harlot tests.
 const harlotVisitedWolfLineMock = vi.fn(
   (targetId: string) => `visited wolf ${targetId}`,
 );
@@ -66,12 +89,16 @@ const harlotVisitNotificationLineMock = vi.fn(
   () => `someone slipped into your bed`,
 );
 
-vi.mock('../game/strings/narration.js', () => ({
-  harlotVisitedWolfLine: harlotVisitedWolfLineMock,
-  harlotVisitedTargetLine: harlotVisitedTargetLineMock,
-  harlotSafeVisitLine: harlotSafeVisitLineMock,
-  harlotVisitNotificationLine: harlotVisitNotificationLineMock,
-}));
+vi.mock('../game/strings/narration.js', async (importOriginal) => {
+  const actual = (await importOriginal()) as typeof import('../game/strings/narration.js');
+  return {
+    ...actual,
+    harlotVisitedWolfLine: harlotVisitedWolfLineMock,
+    harlotVisitedTargetLine: harlotVisitedTargetLineMock,
+    harlotSafeVisitLine: harlotSafeVisitLineMock,
+    harlotVisitNotificationLine: harlotVisitNotificationLineMock,
+  };
+});
 
 // Import after mocks so the module picks them up
 const {
@@ -80,6 +107,7 @@ const {
   processHarlotActions,
   processChemistActions,
   processArsonistActions,
+  processCultistActions,
 } = await import('../game/engine/nightActionProcessors.js');
 
 function makePlayer(partial: Partial<GamePlayerState>): GamePlayerState {
@@ -109,11 +137,15 @@ function makeAction(partial: Partial<NightActionRow>): NightActionRow {
 beforeEach(() => {
   sentMessages.length = 0;
   markPlayerDeadMock.mockClear();
+  setPlayerRoleAndAlignmentMock.mockClear();
   openDmChannelMock.mockClear();
   postChannelMessageMock.mockClear();
   getDousedTargetsMock.mockClear();
   addDousedTargetMock.mockClear();
   clearDousedTargetsMock.mockClear();
+  addCultMemberMock.mockClear();
+  getCultMemberIdsMock.mockClear();
+  getNewestCultMemberIdMock.mockClear();
   harlotVisitedWolfLineMock.mockClear();
   harlotVisitedTargetLineMock.mockClear();
   harlotSafeVisitLineMock.mockClear();
@@ -282,9 +314,10 @@ describe('processDoctorActions', () => {
       // that struct is only used to build dawn death narration.
       expect(res.doctorDeathInfo).toBeNull();
 
+      // Math.random is mocked to 0.9; pickRandom([...3 variants...]) picks index 2
       expect(sentMessages).toHaveLength(1);
-      expect(sentMessages[0]!.content).toContain('wolf in disguise');
-      expect(sentMessages[0]!.content).toContain('escaped with your life');
+      expect(sentMessages[0]!.content).toContain('found fangs');
+      expect(sentMessages[0]!.content).toContain('survived');
     } finally {
       randomSpy.mockRestore();
     }
@@ -341,7 +374,7 @@ describe('processHarlotActions', () => {
     expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h']);
   });
 
-  it('kills the harlot when visiting the wolves’ chosen victim', async () => {
+  it("kills the harlot when visiting the wolves' chosen victim", async () => {
     const players: GamePlayerState[] = [
       makePlayer({ user_id: 'h', role: 'harlot', alignment: 'town' }),
       makePlayer({ user_id: 'v', role: 'villager', alignment: 'town' }),
@@ -382,7 +415,9 @@ describe('processHarlotActions', () => {
     expect(channels).toEqual(['dm:h', 'dm:v']);
   });
 
-  it('treats visiting a wolf who is out for the night as a safe visit', async () => {
+  it('kills the harlot when visiting a wolf-core player regardless of whether the wolf is away', async () => {
+    // The harlot processor checks role, not physical location — visiting a wolf is
+    // always fatal for the harlot even if the wolf is away that night.
     const players: GamePlayerState[] = [
       makePlayer({ user_id: 'h', role: 'harlot', alignment: 'town' }),
       makePlayer({ user_id: 'w', role: 'werewolf', alignment: 'wolf' }),
@@ -390,20 +425,16 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'w' }];
 
-    // Mark the wolf as "away" (e.g., out hunting) so the harlot finds an empty house.
-    const awayIds = new Set<string>(['w']);
-
     const res = await processHarlotActions(players, visits, [], [], 'g');
 
-    expect(res.killedHarlotIds).toEqual([]);
-    expect(res.harlotDeathInfos).toEqual([]);
-    expect(markPlayerDeadMock).not.toHaveBeenCalled();
+    expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'h');
+    expect(res.killedHarlotIds).toEqual(['h']);
+    expect(res.harlotDeathInfos).toEqual([
+      { harlotId: 'h', targetId: 'w', cause: 'visited_wolf' },
+    ]);
 
-    expect(harlotSafeVisitLineMock).toHaveBeenCalledWith('w');
-    expect(harlotVisitNotificationLineMock).toHaveBeenCalled();
-
-    const channels = sentMessages.map((m) => m.channelId).sort();
-    expect(channels).toEqual(['dm:h', 'dm:w']);
+    expect(harlotVisitedWolfLineMock).toHaveBeenCalledWith('w');
+    expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h']);
   });
 });
 
@@ -435,6 +466,30 @@ describe('processChemistActions', () => {
     ];
 
     const res = await processChemistActions(players, actions, 1, 'g', ['chem']);
+
+    expect(res.killedIds).toEqual([]);
+    expect(res.duels).toEqual([]);
+    expect(markPlayerDeadMock).not.toHaveBeenCalled();
+    expect(sentMessages).toHaveLength(0);
+  });
+
+  it('skips chemist duel if the target was already killed earlier that night', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'chem', role: 'chemist', alignment: 'town' }),
+      makePlayer({ user_id: 't', role: 'villager', alignment: 'town' }),
+    ];
+
+    const actions: NightActionRow[] = [
+      makeAction({
+        actor_id: 'chem',
+        target_id: 't',
+        action_kind: 'potion',
+        role: 'chemist',
+      }),
+    ];
+
+    // Target was killed earlier (e.g. by wolves) — no duel, no death narration
+    const res = await processChemistActions(players, actions, 1, 'g', ['t']);
 
     expect(res.killedIds).toEqual([]);
     expect(res.duels).toEqual([]);
@@ -543,6 +598,65 @@ describe('processChemistActions', () => {
   });
 });
 
+describe('processCultistActions', () => {
+  it('returns no conversion when there are no alive cultists', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'v', role: 'villager' }),
+    ];
+
+    const res = await processCultistActions('g', players, [], []);
+
+    expect(res.converted).toBe(false);
+    expect(res.backfiredVictimId).toBeNull();
+    expect(markPlayerDeadMock).not.toHaveBeenCalled();
+  });
+
+  it('fails silently when the plurality target was already killed earlier that night', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'cult', role: 'cultist', alignment: 'cult' }),
+      makePlayer({ user_id: 'target', role: 'villager', alignment: 'town' }),
+    ];
+
+    const actions: NightActionRow[] = [
+      makeAction({
+        actor_id: 'cult',
+        target_id: 'target',
+        action_kind: 'convert',
+        role: 'cultist',
+      }),
+    ];
+
+    // Target was killed before cult acted (e.g. by wolves, chemist, or arsonist)
+    const res = await processCultistActions('g', players, actions, ['target']);
+
+    expect(res.converted).toBe(false);
+    expect(res.backfiredVictimId).toBeNull();
+    expect(res.backfireTargetId).toBeNull();
+    expect(markPlayerDeadMock).not.toHaveBeenCalled();
+    expect(sentMessages).toHaveLength(0);
+  });
+
+  it('fails silently on a tie (no plurality target)', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'cult1', role: 'cultist', alignment: 'cult' }),
+      makePlayer({ user_id: 'cult2', role: 'cultist', alignment: 'cult' }),
+      makePlayer({ user_id: 'v1', role: 'villager', alignment: 'town' }),
+      makePlayer({ user_id: 'v2', role: 'villager', alignment: 'town' }),
+    ];
+
+    const actions: NightActionRow[] = [
+      makeAction({ actor_id: 'cult1', target_id: 'v1', action_kind: 'convert', role: 'cultist' }),
+      makeAction({ actor_id: 'cult2', target_id: 'v2', action_kind: 'convert', role: 'cultist' }),
+    ];
+
+    const res = await processCultistActions('g', players, actions, []);
+
+    expect(res.converted).toBe(false);
+    expect(res.backfiredVictimId).toBeNull();
+    expect(markPlayerDeadMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('processArsonistActions', () => {
   it('returns early when there is no alive arsonist', async () => {
     const players: GamePlayerState[] = [makePlayer({ user_id: 'v' })];
@@ -584,7 +698,7 @@ describe('processArsonistActions', () => {
     expect(sentMessages[0]!.channelId).toBe('dm:a');
   });
 
-  it('ignites doused houses and kills occupants plus visitors with correct kinds', async () => {
+  it('ignites doused houses: kills occupants with correct kinds; non-visit actions are not collateral', async () => {
     const players: GamePlayerState[] = [
       makePlayer({ user_id: 'a', role: 'arsonist', alignment: 'neutral' }),
       makePlayer({ user_id: 'home', role: 'villager', alignment: 'town' }),
@@ -600,14 +714,14 @@ describe('processArsonistActions', () => {
         action_kind: 'ignite',
         role: 'arsonist',
       }),
-      // Away occupant is out visiting someone else
+      // 'away' occupant is out visiting someone else
       makeAction({
         actor_id: 'away',
         target_id: 'someone',
         action_kind: 'visit',
         role: 'harlot',
       }),
-      // Doctor is visiting "home" house
+      // Doctor uses protect on 'home' — NOT a physical presence, should NOT burn
       makeAction({
         actor_id: 'doc',
         target_id: 'home',
@@ -623,16 +737,76 @@ describe('processArsonistActions', () => {
     expect(getDousedTargetsMock).toHaveBeenCalledWith('g');
     expect(clearDousedTargetsMock).toHaveBeenCalledWith('g');
 
-    // Occupants (home + away) and the visiting doctor should all die
+    // Only the two occupants die; doctor using protect does not count as physically present
     const killedSorted = res.killedIds.slice().sort();
-    expect(killedSorted).toEqual(['away', 'doc', 'home'].sort());
+    expect(killedSorted).toEqual(['away', 'home'].sort());
 
     const kinds = new Map(res.burnedVictims.map((v) => [v.victimId, v.kind]));
     expect(kinds.get('home')).toBe('occupant_home');
     expect(kinds.get('away')).toBe('occupant_away');
-    expect(kinds.get('doc')).toBe('visitor');
+    expect(kinds.has('doc')).toBe(false);
 
-    expect(markPlayerDeadMock).toHaveBeenCalledTimes(3);
+    expect(markPlayerDeadMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('harlot physically visiting a doused house on ignite night dies as collateral', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'a', role: 'arsonist', alignment: 'neutral' }),
+      makePlayer({ user_id: 'target', role: 'villager', alignment: 'town' }),
+      makePlayer({ user_id: 'harlot', role: 'harlot', alignment: 'town' }),
+    ];
+
+    const actions: NightActionRow[] = [
+      makeAction({ actor_id: 'a', target_id: null, action_kind: 'ignite', role: 'arsonist' }),
+      // Harlot visits the doused house — physically present
+      makeAction({ actor_id: 'harlot', target_id: 'target', action_kind: 'visit', role: 'harlot' }),
+    ];
+
+    getDousedTargetsMock.mockResolvedValue(['target']);
+
+    const res = await processArsonistActions('g', players, actions, []);
+
+    const killedSorted = res.killedIds.slice().sort();
+    expect(killedSorted).toEqual(['harlot', 'target'].sort());
+
+    const kinds = new Map(res.burnedVictims.map((v) => [v.victimId, v.kind]));
+    expect(kinds.get('target')).toBe('occupant_home');
+    expect(kinds.get('harlot')).toBe('visitor');
+
+    expect(markPlayerDeadMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('thief steal and other non-visit actions on a doused house do not cause collateral deaths', async () => {
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'a', role: 'arsonist', alignment: 'neutral' }),
+      makePlayer({ user_id: 'target', role: 'villager', alignment: 'town' }),
+      makePlayer({ user_id: 'thief', role: 'thief', alignment: 'town' }),
+      makePlayer({ user_id: 'cultist', role: 'cultist', alignment: 'cult' }),
+      makePlayer({ user_id: 'hunter', role: 'cult_hunter', alignment: 'town' }),
+    ];
+
+    const actions: NightActionRow[] = [
+      makeAction({ actor_id: 'a', target_id: null, action_kind: 'ignite', role: 'arsonist' }),
+      // Thief steals from the doused house — figurative, not physical
+      makeAction({ actor_id: 'thief', target_id: 'target', action_kind: 'steal', role: 'thief' }),
+      // Cultist converts the doused target — not physical
+      makeAction({ actor_id: 'cultist', target_id: 'target', action_kind: 'convert', role: 'cultist' }),
+      // Cult hunter hunts the doused target — not physical
+      makeAction({ actor_id: 'hunter', target_id: 'target', action_kind: 'hunt', role: 'cult_hunter' }),
+    ];
+
+    getDousedTargetsMock.mockResolvedValue(['target']);
+
+    const res = await processArsonistActions('g', players, actions, []);
+
+    // Only the doused target dies
+    expect(res.killedIds).toEqual(['target']);
+    expect(res.burnedVictims).toHaveLength(1);
+    expect(res.burnedVictims[0]!.victimId).toBe('target');
+    expect(res.burnedVictims[0]!.kind).toBe('occupant_home');
+
+    expect(markPlayerDeadMock).toHaveBeenCalledTimes(1);
+    expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'target');
   });
 
   it('does nothing on ignite when there are no doused houses', async () => {
