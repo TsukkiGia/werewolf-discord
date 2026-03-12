@@ -121,7 +121,7 @@ beforeEach(() => {
 });
 
 describe('buildAwayPlayerIds', () => {
-  it('collects actors for visit/kill/potion/protect actions with targets', () => {
+  it('collects actors for visit/kill/potion actions with targets (protect does not make doctor away)', () => {
     const actions: NightActionRow[] = [
       makeAction({
         actor_id: 'visitor',
@@ -159,8 +159,9 @@ describe('buildAwayPlayerIds', () => {
 
     const away = buildAwayPlayerIds(actions);
     expect(Array.from(away).sort()).toEqual(
-      ['visitor', 'killer', 'chemist', 'doctor'].sort(),
+      ['visitor', 'killer', 'chemist'].sort(),
     );
+    expect(away.has('doctor')).toBe(false);
     expect(away.has('seer')).toBe(false);
     expect(away.has('noTarget')).toBe(false);
   });

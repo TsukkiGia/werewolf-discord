@@ -42,7 +42,7 @@ function buildPlayersById(players: GamePlayerState[]): Map<string, GamePlayerSta
   return map;
 }
 
-const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'murder', 'potion', 'protect', 'steal', 'convert', 'hunt'];
+const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'murder', 'potion', 'steal', 'convert', 'hunt'];
 
 export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
   const away = new Set<string>();
