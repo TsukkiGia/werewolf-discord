@@ -507,8 +507,9 @@ export async function handleNightAction(req: Request, res: Response, componentId
     },
   });
 
-  // If a werewolf submits a kill target, notify the other wolves in DMs.
-  if (def.name === 'werewolf' && def.nightAction.kind === 'kill' && targetId) {
+  // If a werewolf submits a kill action, notify the other wolves in DMs.
+  // Distinguish between choosing a target and choosing to kill no one.
+  if (def.name === 'werewolf' && def.nightAction.kind === 'kill') {
     void (async () => {
       try {
         const players = await getPlayersForGame(gameId);
@@ -518,7 +519,15 @@ export async function handleNightAction(req: Request, res: Response, componentId
 
         if (otherWolves.length === 0) return;
 
-        const content = `Wolf vote: <@${actorId}> has chosen to attack <@${targetId}> tonight.`;
+        let content: string;
+        if (isPass) {
+          content = `Wolf vote: <@${actorId}> has chosen **not** to attack anyone tonight.`;
+        } else if (targetId) {
+          content = `Wolf vote: <@${actorId}> has chosen to attack <@${targetId}> tonight.`;
+        } else {
+          // No meaningful information to share (e.g., timeout with null target).
+          return;
+        }
 
         await Promise.all(
           otherWolves.map((p) =>
@@ -529,6 +538,41 @@ export async function handleNightAction(req: Request, res: Response, componentId
         );
       } catch (err) {
         console.error('Failed to DM wolf vote to pack members', gameId, actorId, err);
+      }
+    })();
+  }
+
+  // If a cultist submits a convert action, notify the other cultists in DMs.
+  // Distinguish between choosing a target and choosing to convert no one.
+  if (def.name === 'cultist' && def.nightAction.kind === 'convert') {
+    void (async () => {
+      try {
+        const players = await getPlayersForGame(gameId);
+        const otherCultists = players.filter(
+          (p) => p.is_alive && p.user_id !== actorId && p.role === 'cultist',
+        );
+
+        if (otherCultists.length === 0) return;
+
+        let content: string;
+        if (isPass) {
+          content = `Cult vote: <@${actorId}> has chosen **not** to attempt a conversion tonight.`;
+        } else if (targetId) {
+          content = `Cult vote: <@${actorId}> has chosen to attempt converting <@${targetId}> tonight.`;
+        } else {
+          // No meaningful information to share (e.g., timeout with null target).
+          return;
+        }
+
+        await Promise.all(
+          otherCultists.map((p) =>
+            sendDmMessage(p.user_id, {
+              content,
+            }),
+          ),
+        );
+      } catch (err) {
+        console.error('Failed to DM cult vote to cultists', gameId, actorId, err);
       }
     })();
   }
