@@ -86,6 +86,8 @@ import {
   cultBackfiredLine,
   cultHunterKilledLine,
   cultBackfireMonsterLine,
+  traitorAwakenedYouLine,
+  traitorAwakenedPackLine,
 } from '../strings/narration.js';
 
 interface NightActionResolutionOutcome {
@@ -137,6 +139,15 @@ async function applyLoverSorrowDeaths(
 
   await markPlayerDead(gameId, survivor.user_id);
   survivor.is_alive = false;
+
+  try {
+    const dmChannelId = await openDmChannel(survivor.user_id);
+    await postChannelMessage(dmChannelId, {
+      content: loverSorrowDeathLine(survivor.user_id, partner.user_id),
+    });
+  } catch (err) {
+    console.error('Failed to DM lover sorrow death', gameId, survivor.user_id, err);
+  }
 
   return { sorrowVictimId: survivor.user_id, partnerId: partner.user_id };
 }
@@ -214,6 +225,37 @@ async function maybeConvertTraitorToWerewolf(gameId: string): Promise<void> {
   if (!traitor) return;
 
   await setPlayerRoleAndAlignment(gameId, traitor.user_id, 'werewolf', 'wolf');
+
+  const updatedPlayers = await getPlayersForGame(gameId);
+  const packMates = updatedPlayers.filter(
+    (p) => p.is_alive && p.alignment === 'wolf' && p.user_id !== traitor.user_id,
+  );
+  const packMentions =
+    packMates.length > 0
+      ? packMates.map((p) => `<@${p.user_id}>`).join(', ')
+      : 'none — you stand alone';
+
+  try {
+    const dmChannelId = await openDmChannel(traitor.user_id);
+    await postChannelMessage(dmChannelId, {
+      content: traitorAwakenedYouLine(packMentions),
+    });
+  } catch (err) {
+    console.error('Failed to DM traitor awakening', gameId, traitor.user_id, err);
+  }
+
+  await Promise.all(
+    packMates.map(async (wolf) => {
+      try {
+        const dmChannelId = await openDmChannel(wolf.user_id);
+        await postChannelMessage(dmChannelId, {
+          content: traitorAwakenedPackLine(traitor.user_id),
+        });
+      } catch (err) {
+        console.error('Failed to DM pack about traitor awakening', gameId, wolf.user_id, err);
+      }
+    }),
+  );
 }
 
 /** Atomically advance day → night, then DM night prompts and schedule the timeout. */
@@ -1003,6 +1045,14 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
 
     if (targetId) {
       await markPlayerDead(gameId, targetId);
+      try {
+        const dmChannelId = await openDmChannel(targetId);
+        await postChannelMessage(dmChannelId, {
+          content: 'A dying Hunter took aim at you in their final moments. You were shot and did not survive.',
+        });
+      } catch (err) {
+        console.error('Failed to DM hunter shot victim', gameId, targetId, err);
+      }
     }
 
     const updatedPlayers = await getPlayersForGame(gameId);

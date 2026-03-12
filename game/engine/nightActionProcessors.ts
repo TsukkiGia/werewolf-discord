@@ -10,7 +10,10 @@ import {
   harlotVisitedTargetLine,
   harlotSafeVisitLine,
   harlotVisitNotificationLine,
+   harlotFatalVisitOnYouLine,
+   harlotFatalVisitOnYourHouseLine,
   doctorSavedTargetLine,
+  doctorQuietWatchTargetLine,
   doctorWolfProtectionKilledDmLine,
   doctorWolfProtectionSurvivedDmLine,
   doctorProtectionResultDmLine,
@@ -20,6 +23,9 @@ import {
   chemistTargetSurvivedDmLine,
   chemistTargetDiedFromDuelDmLine,
   arsonistDousedTargetDmLine,
+  arsonistDousedTargetVictimDmLine,
+  arsonistFireHomeDeathLine,
+  arsonistFireAwayDeathLine,
   serialKillerKillDmLine,
   serialKillerVictimDmLine,
   skBlockedByDoctorDmLine,
@@ -34,13 +40,17 @@ import {
   alphaWolfTurnedPackLine,
   thiefNewRoleDmLine,
   thiefTargetDmLine,
+  inspectedTargetDmLine,
   cultConvertedDmLine,
   cultNewMemberNotifyDmLine,
   cultWolfImmuneDmLine,
+  cultImmuneTargetDmLine,
   cultHunterNotCultistDmLine,
   cultHunterCultistKilledDmLine,
   cultHunterBackfireNotifyDmLine,
   cultBackfireVictimDmLine,
+  cultHunterMissTargetDmLine,
+  cultHunterKilledTargetDmLine,
 } from '../strings/narration.js';
 import { addDousedTarget, clearDousedTargets, getDousedTargets } from '../../db/arsonist.js';
 import { addCultMember, getCultMemberIds, getNewestCultMemberId } from '../../db/cult.js';
@@ -141,6 +151,9 @@ export async function processSeerActions(
       }
 
       await safeDm(action.actor_id, content, 'seer inspection result');
+      if (action.actor_id !== target.user_id) {
+        await safeDm(target.user_id, inspectedTargetDmLine(), 'seer inspection target');
+      }
     }),
   );
 }
@@ -174,6 +187,17 @@ export async function processDoctorActions(
   const playersById = buildPlayersById(players);
   const protectActions = actions.filter(
     (a) => a.action_kind === 'protect' && a.target_id,
+  );
+
+  const serialKillerTargets = new Set(
+    actions
+      .filter(
+        (a) =>
+          a.action_kind === 'kill' &&
+          a.target_id &&
+          a.role === 'serial_killer',
+      )
+      .map((a) => a.target_id as string),
   );
 
   let anySaved = false;
@@ -210,13 +234,24 @@ export async function processDoctorActions(
 
       // Standard protection — target is not a wolf.
       const isSelf = targetId === doctorId;
-      const saved =
+      const savedFromWolves =
         killTargets.includes(targetId) && !killedIds.includes(targetId);
+      const savedFromSk =
+        serialKillerTargets.has(targetId) && !killedIds.includes(targetId);
+      const saved = savedFromWolves || savedFromSk;
       if (saved) anySaved = true;
 
       const content = doctorProtectionResultDmLine(isSelf, saved, targetId);
 
       await safeDm(doctorId, content, 'doctor protection result');
+
+      // Also notify the protected target that someone watched over them.
+      if (!isSelf) {
+        const targetContent = saved
+          ? doctorSavedTargetLine()
+          : doctorQuietWatchTargetLine();
+        await safeDm(targetId, targetContent, 'doctor protection target result');
+      }
     }),
   );
 
@@ -263,26 +298,31 @@ export async function processHarlotActions(
         serialKillerVictimIds.includes(targetId);
 
       let dmContent: string;
+      let targetDmContent: string | null = null;
 
       if (visitedWolfOrSk) {
         await markPlayerDead(gameId, harlotId);
         killedHarlotIds.push(harlotId);
         harlotDeathInfos.push({ harlotId, targetId, cause: 'visited_wolf' });
         dmContent = harlotVisitedWolfLine(targetId);
+        targetDmContent = harlotFatalVisitOnYouLine();
       } else if (visitedWolfOrSkTarget) {
         await markPlayerDead(gameId, harlotId);
         killedHarlotIds.push(harlotId);
         harlotDeathInfos.push({ harlotId, targetId, cause: 'visited_victim' });
         dmContent = harlotVisitedTargetLine(targetId);
+        targetDmContent = harlotFatalVisitOnYourHouseLine();
       } else {
         dmContent = harlotSafeVisitLine(targetId);
       }
 
       await safeDm(harlotId, dmContent, 'harlot visit result');
 
-      // Notify the visited player (only on safe visits — dead players don't get DMs)
+      // Notify the visited player about the visit.
       if (!visitedWolfOrSk && !visitedWolfOrSkTarget) {
         await safeDm(targetId, harlotVisitNotificationLine(), 'harlot visit notification to target');
+      } else if (targetDmContent) {
+        await safeDm(targetId, targetDmContent, 'harlot fatal visit notification to target');
       }
     }),
   );
@@ -462,9 +502,23 @@ export async function processArsonistActions(
 
     await clearDousedTargets(gameId);
 
-    const burnedVictims: BurnedVictimInfo[] = Array.from(burnedKinds.entries()).map(
-      ([victimId, kind]) => ({ victimId, kind }),
-    );
+    const burnedVictims: BurnedVictimInfo[] = Array.from(
+      burnedKinds.entries(),
+    ).map(([victimId, kind]) => ({ victimId, kind }));
+
+    // DM burned victims about their death.
+    for (const { victimId, kind } of burnedVictims) {
+      try {
+        const dmChannelId = await openDmChannel(victimId);
+        const content =
+          kind === 'occupant_away'
+            ? arsonistFireAwayDeathLine(victimId)
+            : arsonistFireHomeDeathLine(victimId);
+        await postChannelMessage(dmChannelId, { content });
+      } catch (err) {
+        console.error('Failed to DM arsonist fire victim', gameId, victimId, err);
+      }
+    }
 
     return { killedIds: killedByFire, burnedVictims };
   }
@@ -473,6 +527,7 @@ export async function processArsonistActions(
   if (action.target_id) {
     await addDousedTarget(gameId, action.target_id);
     await safeDm(arsonist.user_id, arsonistDousedTargetDmLine(action.target_id), "arsonist douse result");
+    await safeDm(action.target_id, arsonistDousedTargetVictimDmLine(), 'arsonist douse target result');
   }
 
   return { killedIds: [], burnedVictims: [] };
@@ -605,6 +660,11 @@ export async function processCultistActions(
       // Wolf / Serial Killer backfire: tell the victim what happened and let the rest
       // of the cult know their target was beyond their reach.
       await safeDm(
+        target.user_id,
+        cultImmuneTargetDmLine(victimId),
+        'cult immune target',
+      );
+      await safeDm(
         victimId,
         cultBackfireVictimDmLine(target.user_id),
         'cult backfire victim',
@@ -662,6 +722,11 @@ export async function processCultHunterActions(
 
   if (target.alignment !== 'cult') {
     await safeDm(hunter.user_id, cultHunterNotCultistDmLine(), 'cult hunter miss');
+    await safeDm(
+      target.user_id,
+      cultHunterMissTargetDmLine(),
+      'cult hunter miss target',
+    );
     return { killedCultistId: null };
   }
 
@@ -670,6 +735,11 @@ export async function processCultHunterActions(
   }
 
   await safeDm(hunter.user_id, cultHunterCultistKilledDmLine(target.user_id), 'cult hunter kill');
+  await safeDm(
+    target.user_id,
+    cultHunterKilledTargetDmLine(),
+    'cult hunter kill target',
+  );
   return { killedCultistId: target.user_id };
 }
 
@@ -746,7 +816,9 @@ export async function processWolfKillActions(params: {
 
     if (protectedSet.has(targetId)) {
       // Doctor blocked this kill.
-      const killActors = actions.filter((a) => a.action_kind === 'kill' && a.target_id === targetId);
+      const killActors = actions.filter(
+        (a) => a.action_kind === 'kill' && a.target_id === targetId,
+      );
       await Promise.all(
         killActors.map(async (a) => {
           try {
@@ -757,12 +829,6 @@ export async function processWolfKillActions(params: {
           }
         }),
       );
-      try {
-        const dmChannelId = await openDmChannel(targetId);
-        await postChannelMessage(dmChannelId, { content: doctorSavedTargetLine() });
-      } catch (err) {
-        console.error('Failed to DM doctor-saved target result', err);
-      }
       continue;
     }
 
@@ -950,8 +1016,11 @@ export async function processSerialKillerActions(
   const isProtectedAtHome = protectedSet.has(target.user_id);
 
   if (isProtectedAtHome) {
-    await safeDm(serialKiller.user_id, skBlockedByDoctorDmLine(), 'serial killer blocked by doctor');
-    await safeDm(target.user_id, doctorSavedTargetLine(), 'doctor saved from serial killer');
+    await safeDm(
+      serialKiller.user_id,
+      skBlockedByDoctorDmLine(),
+      'serial killer blocked by doctor',
+    );
     return { killedIds: killedBySerialKiller };
   }
 

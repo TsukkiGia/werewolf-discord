@@ -80,11 +80,29 @@ export function doctorSavedRumorLine(): string {
   return pickRandom(variants);
 }
 
+export function inspectedTargetDmLine(): string {
+  const variants = [
+    'You sleep is broken by the feeling of unseen eyes on you. Someone probed at your secrets in the night.',
+    'You wake with the sense that you were being watched — not by wolves, but by something searching for the truth about you.',
+    'Your dreams were full of staring eyes and whispered questions. It feels like someone tried to read who you really are.',
+  ];
+  return pickRandom(variants);
+}
+
 export function doctorSavedTargetLine(): string {
   const variants = [
     'You wake sore and shaken, with flashes of claws and teeth — and a pair of steady hands dragging you back from the brink. The wolves came for you, but the doctor saved your life.',
     'Your last memory of the night is fur, fangs, and sudden pain — then bandages and whispered instructions. Someone, somewhere, patched you up. The wolves tried to kill you, but the doctor stood between you and the grave.',
     'You should not be alive. The wolves tore into you last night, but a doctor worked through the dark to pull you back from death.',
+  ];
+  return pickRandom(variants);
+}
+
+export function doctorQuietWatchTargetLine(): string {
+  const variants = [
+    'You slept lightly, never quite sure why — as if someone was standing guard over you in the dark.',
+    'The night felt strangely still around your home. In the morning you can’t shake the sense that someone watched over you.',
+    'Nothing attacked you last night, but you woke with the calm certainty that a careful pair of eyes had been keeping watch.',
   ];
   return pickRandom(variants);
 }
@@ -226,6 +244,24 @@ export function harlotVisitNotificationLine(): string {
     'Someone slipped into your bed last night and gave you the ride of your life. By dawn, they were gone without a trace.',
     'You woke sore and smiling — someone slid under your covers and gave you the ride of your life, then vanished before sunrise.',
     'In the dark, a stranger eased into your bed and made the night unforgettable. By morning, they were nowhere to be found.',
+  ];
+  return pickRandom(variants);
+}
+
+export function harlotFatalVisitOnYouLine(): string {
+  const variants = [
+    'In the dark, someone slipped into your home — and never left it alive. By dawn, you know a visitor died because they chose your door.',
+    'You remember company in the night, then chaos. When morning comes, word spreads that the one who visited you never saw the sunrise.',
+    'Someone shared your night, and the village whispers that it was their last. Whatever truly killed them, they died after coming to you.',
+  ];
+  return pickRandom(variants);
+}
+
+export function harlotFatalVisitOnYourHouseLine(): string {
+  const variants = [
+    'You had a visitor last night — and then the wolves crashed in. By sunrise, you hear that the one who chose your house died in the attack.',
+    'There was someone else in your home when the claws came out. Morning gossip confirms it: your midnight visitor did not survive.',
+    'You weren’t alone when the wolves struck. The village now speaks in hushed tones about the stranger who died after sharing your roof.',
   ];
   return pickRandom(variants);
 }
@@ -379,7 +415,7 @@ export function loverSorrowDeathLine(victimId: string, partnerId: string | undef
   const variants = [
     `<@${victimId}> could not bear life without ${partnerMention}. They died of a broken heart.`,
     `Grief proves fatal: after ${partnerMention} fell, <@${victimId}> slipped away in sorrow.`,
-    `The village finds <@${victimId}> gone before dawn, a victim not of claws or fire but of heartbreak for ${partnerMention}.`,
+    `Before dawn, the village finds <@${victimId}> clutching ${partnerMention}'s lifeless body, their wail spent and their heart finally broken — they have died of heartbreak.`,
   ];
   return pickRandom(variants);
 }
@@ -449,49 +485,49 @@ export function alphaWolfBiteChannelLine(): string {
 
 export function cultWinLine(): string {
   const variants = [
-    'The village has been consumed from within. The cult wins!',
-    'Every soul in the village now belongs to the cult. The cult wins!',
-    'The cult has converted them all. There is no one left to resist. The cult wins!',
+    'The village has been hollowed out from within. Every whispered vow now belongs to the cult — the cult wins.',
+    'No banners are raised, no trumpets sound. One by one, every mind has bent the knee. The cult wins.',
+    'By the time the village understands what happened, it is already too late. Every soul answers to the same creed. The cult wins.',
   ];
   return pickRandom(variants);
 }
 
 export function revealCultistsLine(mentions: string): string {
-  return `The cultists were: ${mentions}.`;
+  return `In the end, the cultists lurking in the shadows were: ${mentions}.`;
 }
 
 export function cultGainedMemberLine(): string {
   const variants = [
-    'In the dead of night, a whisper passed through the village. Someone has joined the cult.',
-    "The cult's shadow grew longer overnight. A new voice now speaks their creed.",
-    'A villager woke up changed. The cult has claimed another.',
+    'In the dead of night, a whisper coils through the village. Someone has answered and joined the cult.',
+    "The cult's shadow stretches longer by morning. A once-ordinary villager now murmurs their secret creed.",
+    'A villager wakes with new eyes and a new allegiance. Quietly, the cult has claimed another soul.',
   ];
   return pickRandom(variants);
 }
 
 export function cultBackfiredLine(victimId: string): string {
   const variants = [
-    `The cult reached too far. Their newest member, <@${victimId}>, paid the price instead.`,
-    `The Cult Hunter could not be taken. The cult's newest recruit, <@${victimId}>, died in the attempt.`,
-    `The cult's ambition backfired. <@${victimId}>, their most recent convert, perished.`,
+    `The cult reached too far. Their newest member, <@${victimId}>, became the sacrifice instead of the prize.`,
+    `The Cult Hunter would not bow. The cult's latest recruit, <@${victimId}>, died in the doomed attempt.`,
+    `Ambition curdled into disaster. The cult's most recent convert, <@${victimId}>, perished when the ritual turned on them.`,
   ];
   return pickRandom(variants);
 }
 
 export function cultBackfireMonsterLine(victimId: string): string {
   const variants = [
-    `The cult reached for something monstrous in the dark. By dawn, only <@${victimId}>'s body was left behind.`,
-    `Whispers say a cultist tried to claim a creature beyond their control. <@${victimId}> paid for the attempt with their life.`,
-    `The cult's ritual latched onto a nightmare instead of a soul. <@${victimId}> was torn apart by what they tried to convert.`,
+    `The cult reached for something monstrous in the dark. By dawn, only <@${victimId}>'s broken body remained.`,
+    `Whispers say a cultist tried to bind a creature beyond their control. <@${victimId}> paid for that arrogance with their life.`,
+    `The ritual latched onto a nightmare instead of a willing soul. Whatever answered tore <@${victimId}> apart.`,
   ];
   return pickRandom(variants);
 }
 
 export function cultHunterKilledLine(victimId: string): string {
   const variants = [
-    `<@${victimId}> was hunted down in the night — a cultist, eliminated.`,
-    `The Cult Hunter struck true. <@${victimId}> has been removed from the cult's ranks.`,
-    `<@${victimId}> was found bearing the mark of the cult and was swiftly eliminated.`,
+    `<@${victimId}> was hunted down in the night — a marked cultist, cut from the circle.`,
+    `The Cult Hunter struck true. <@${victimId}> was torn from the cult's ranks before they could convert another.`,
+    `<@${victimId}> was found bearing the cult's hidden mark and was swiftly eliminated.`,
   ];
   return pickRandom(variants);
 }
@@ -499,57 +535,81 @@ export function cultHunterKilledLine(victimId: string): string {
 export function cultConvertedDmLine(cultmateIds: string[]): string {
   const cultmates = cultmateIds.map((id) => `<@${id}>`).join(', ');
   return pickRandom([
-    `You have been converted. You are now a **cultist**. Your fellow cultists: ${cultmates}.`,
-    `A cultist visited you in the night. You are now one of them — a **cultist**. Your brothers and sisters: ${cultmates}.`,
-    `Your old life is over. You are now a **cultist**. The cult: ${cultmates}.`,
+    `Something took hold of you in the dark. You have been converted — you are now a **cultist**. Your fellow cultists: ${cultmates}.`,
+    `A hooded figure visited you in the night and whispered a new truth. You are now one of them — a **cultist**. Your brothers and sisters: ${cultmates}.`,
+    `Your old loyalties feel distant and dull. You are now a **cultist**. The cult that owns your soul: ${cultmates}.`,
   ]);
 }
 
 export function cultNewMemberNotifyDmLine(newMemberId: string): string {
   return pickRandom([
-    `A new soul has joined the cause. <@${newMemberId}> is now one of us.`,
-    `The cult grows. <@${newMemberId}> has been converted and stands with you.`,
-    `Welcome <@${newMemberId}> to the fold. They are now a cultist.`,
+    `A new soul has joined the circle. <@${newMemberId}> is now one of us.`,
+    `The cult grows in the dark. <@${newMemberId}> has been converted and now stands beside you.`,
+    `Another mind has bent the knee. Welcome <@${newMemberId}> to the fold — they are now a cultist.`,
   ]);
 }
 
 export function cultWolfImmuneDmLine(): string {
   return pickRandom([
-    'Your target resisted the conversion. They are beyond your reach.',
-    "The conversion failed — your target is immune to the cult's influence.",
-    'Your chosen target could not be turned. Choose differently next time.',
+    'You pressed your will against theirs — and it broke on something older and stronger. Your target resisted the conversion.',
+    "The ritual fizzled out around them. This one is immune to the cult's influence.",
+    'Your chosen target will not kneel. They cannot be turned. Choose differently next time.',
+  ]);
+}
+
+export function cultImmuneTargetDmLine(victimId: string): string {
+  return pickRandom([
+    `Something clawed at the edges of your mind in the night — then snapped back on its caster. <@${victimId}> of the cult is dead, and you remain unchanged.`,
+    `A ritual tried to wrap itself around your soul and failed. Somewhere in the dark, <@${victimId}> of the cult paid for the attempt with their life.`,
+    `The cult reached for your allegiance and found only resistance. Their power could not touch you — <@${victimId}> died instead.`,
+  ]);
+}
+
+export function cultHunterMissTargetDmLine(): string {
+  return pickRandom([
+    'You felt a prickle on your skin last night, as if someone was hunting for a cult mark that wasn’t there.',
+    'Something searched you in the dark and found nothing. Whoever was hunting cultists did not claim you.',
+    'A wary gaze brushed past your soul, looking for the cult’s stain. They moved on — you were not what they sought.',
+  ]);
+}
+
+export function cultHunterKilledTargetDmLine(): string {
+  return pickRandom([
+    'You feel a presence close in on you, cold and certain. There is no bargaining — you are marked as cult and cut down.',
+    'A hunter’s judgment falls on you in the night. They see the cult’s mark and end your story there.',
+    'Someone who knows the cult’s signs found them on you. Their sentence is swift, and you do not see the dawn.',
   ]);
 }
 
 export function cultHunterNotCultistDmLine(): string {
   return pickRandom([
-    'Your target bears no cult mark. They are not a cultist.',
-    'You hunted carefully, but your target is not one of them.',
-    'No cult mark found. Your target is innocent of the cult.',
+    'You search for the hidden mark and find nothing. Your target is not a cultist.',
+    'You hunted carefully through the shadows, but this one is not part of the cult.',
+    'No sigil, no whisper, no trace. Your target is innocent of the cult — for now.',
   ]);
 }
 
 export function cultHunterCultistKilledDmLine(targetId: string): string {
   return pickRandom([
-    `You found the mark. <@${targetId}> was a cultist — they will not convert another.`,
-    `Your hunt was true. <@${targetId}> bore the cult's mark and has been eliminated.`,
-    `<@${targetId}> was a cultist. They are gone now.`,
+    `You found the mark burning beneath the surface. <@${targetId}> was a cultist — they will not convert another.`,
+    `Your hunt was true. <@${targetId}> bore the cult's secret sigil and has been eliminated.`,
+    `<@${targetId}> was a cultist, rooted out and removed from the circle. They are gone now.`,
   ]);
 }
 
 export function cultHunterBackfireNotifyDmLine(): string {
   return pickRandom([
-    'The cult came for you last night, but their newest member paid the price instead. Stay vigilant.',
-    'You were targeted by the cult — but their own recruit died in your place.',
-    "The cult's conversion attempt backfired. Their newest member is dead. You are safe.",
+    'The cult came for you last night, but their newest member died screaming in your place. For now, you live.',
+    'You felt a hand reaching for your soul — then heard a different voice fall silent. The cult lost one of their own trying to claim you.',
+    "The cult's conversion attempt backfired. Their newest recruit was sacrificed instead of you. You are safe — this time.",
   ]);
 }
 
 export function cultBackfireVictimDmLine(targetId: string): string {
   return pickRandom([
-    `You reached out to drag <@${targetId}> into the cult — but they were far from helpless. They turned on you, and you never made it back.`,
-    `Your whispered rites failed. <@${targetId}> broke free and tore you apart instead of joining your cause.`,
-    `The moment you tried to claim <@${targetId}> for the cult, everything went wrong. Teeth, steel, and panic — and then darkness.`,
+    `You reached out to drag <@${targetId}> into the cult — but they were far from helpless. They turned on you, and you never made it back from the attempt.`,
+    `Your whispered rites failed. <@${targetId}> broke free and tore you apart instead of joining your cause. Your blood seals the broken ritual.`,
+    `The moment you tried to claim <@${targetId}> for the cult, everything went wrong: teeth, steel, panic — and then darkness.`,
   ]);
 }
 
@@ -678,6 +738,14 @@ export function arsonistDousedTargetDmLine(targetId: string): string {
   ]);
 }
 
+export function arsonistDousedTargetVictimDmLine(): string {
+  return pickRandom([
+    'The air in your home smells faintly of oil and smoke, though you never lit a fire. Something about your house feels primed for disaster.',
+    'You wake with the uneasy sense that your walls are slick with danger, as if someone quietly prepared your home to burn.',
+    'Nothing attacked you last night, but the faint scent of fuel clings to your doorframe. It feels like someone has marked your house for flames.',
+  ]);
+}
+
 // --- Serial Killer DMs ---
 
 export function skBlockedByDoctorDmLine(): string {
@@ -694,4 +762,22 @@ export function wolfStabbedBySKDmLine(): string {
     'You came for blood and found a blade instead. The Serial Killer was ready for you.',
     'Your prey turned hunter. Before your fangs could close, cold steel found its mark.',
   ]);
+}
+
+export function traitorAwakenedYouLine(packMentions: string): string {
+  const variants = [
+    `The howls you once feared now feel like home. You wake with new hunger — you have awakened as a **WEREWOLF**. Your pack: ${packMentions}.`,
+    'Something inside you finally snaps into place. The village was never truly yours. You are now a **WEREWOLF**, called to stand with the remaining wolves.',
+    `Your old loyalties crumble before the pull of the hunt. You awaken as a **WEREWOLF**. Your pack: ${packMentions}.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function traitorAwakenedPackLine(traitorId: string): string {
+  const variants = [
+    `A familiar face turns toward the moon. <@${traitorId}> has awakened as one of your pack.`,
+    `You feel the pack’s presence swell. The Traitor, <@${traitorId}>, now howls with you.`,
+    `Another heart beats in time with the hunt. <@${traitorId}> has joined you as a wolf.`,
+  ];
+  return pickRandom(variants);
 }
