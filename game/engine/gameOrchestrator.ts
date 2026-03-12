@@ -608,6 +608,15 @@ async function resolveNightActionsAndCollectDeaths(params: {
     players.filter((p) => p.role === 'harlot').map((p) => p.user_id),
   );
 
+  const serialKillerVictimIds = actions
+    .filter(
+      (a) =>
+        a.action_kind === 'kill' &&
+        a.target_id &&
+        a.role === 'serial_killer',
+    )
+    .map((a) => a.target_id as string);
+
   // --- Wolf kill ---
   // "Not home" mechanic: any player with a night action that targets another
   // player (visit, kill, protect, potion) is away for the night.
@@ -814,7 +823,10 @@ async function resolveNightActionsAndCollectDeaths(params: {
 
     for (const a of actions) {
       if (
-        (a.action_kind === 'visit' || a.action_kind === 'potion' || a.action_kind === 'steal' || a.action_kind === 'murder' || a.action_kind === 'convert' || a.action_kind === 'hunt') &&
+        (a.action_kind === 'visit' ||
+          a.action_kind === 'potion' ||
+          a.action_kind === 'convert' ||
+          a.action_kind === 'hunt') &&
         a.target_id === targetId &&
         !harlotIds.has(a.actor_id)
       ) {
@@ -872,8 +884,8 @@ async function resolveNightActionsAndCollectDeaths(params: {
     players,
     visitActions,
     wolfChosenVictims,
+    serialKillerVictimIds,
     gameId,
-    awayPlayerIds,
   );
   killedIds.push(...killedHarlotIds);
 

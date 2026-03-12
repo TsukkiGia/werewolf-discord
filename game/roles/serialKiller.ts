@@ -11,7 +11,7 @@ export const SerialKillerRole: RoleDefinition = {
   unique: true,
   minPlayers: 9,
   nightAction: {
-    kind: 'murder',
+    kind: 'kill',
     target: 'player',
     canTargetSelf: false,
     prompt:
@@ -25,4 +25,3 @@ export const SerialKillerRole: RoleDefinition = {
     '- If the wolves ever come for you while you are home and unprotected, most nights **one of them** will die to your blade instead — but there\'s a small chance they finally tear you apart.\n' +
     '- You win only if you are the **last survivor** (Lover exceptions still apply).',
 };
-

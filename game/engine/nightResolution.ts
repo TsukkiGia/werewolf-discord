@@ -1,5 +1,6 @@
 import type { GamePlayerState } from '../../db/players.js';
 import type { NightActionRow } from '../../db/nightActions.js';
+import { WOLF_PACK_ROLES, type RoleName } from '../types.js';
 import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
 
 /**
@@ -96,7 +97,12 @@ export function evaluateNightResolution(
   }
 
   const killTargets = actions
-    .filter((a) => a.action_kind === 'kill' && a.target_id)
+    .filter(
+      (a) =>
+        a.action_kind === 'kill' &&
+        a.target_id &&
+        WOLF_PACK_ROLES.has(a.role as RoleName),
+    )
     .map((a) => a.target_id as string);
 
   const protectTargets = actions

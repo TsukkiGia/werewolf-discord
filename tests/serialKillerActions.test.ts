@@ -143,7 +143,7 @@ describe('Serial Killer night actions', () => {
         id: 1,
         actor_id: 'sk',
         target_id: 'v',
-        action_kind: 'murder',
+        action_kind: 'kill',
         role: 'serial_killer',
       }),
     ];
@@ -196,7 +196,7 @@ describe('Serial Killer night actions', () => {
         id: 1,
         actor_id: 'sk',
         target_id: 'v',
-        action_kind: 'murder',
+        action_kind: 'kill',
         role: 'serial_killer',
       }),
       // Doctor protects v at home

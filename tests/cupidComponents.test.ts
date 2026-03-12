@@ -24,7 +24,9 @@ vi.mock('../db.js', () => ({
   recordLovers: recordLoversMock,
 }));
 
-const sendDmMessageMock = vi.fn(async () => {});
+const sendDmMessageMock = vi.fn<[string, { content: string }], Promise<void>>(
+  async () => {},
+);
 
 vi.mock('../utils.js', () => ({
   postChannelMessage: vi.fn(async () => ({ json: async () => ({ id: 'msg1' }) })),
@@ -37,7 +39,7 @@ vi.mock('../logging.js', () => ({
   logEvent: vi.fn(),
 }));
 
-const getInteractionUserIdMock = vi.fn<string | null, [Request]>();
+const getInteractionUserIdMock = vi.fn<[Request], string | null>();
 
 vi.mock('../interactionHelpers.js', () => ({
   getInteractionUserId: (req: Request) => getInteractionUserIdMock(req),

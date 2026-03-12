@@ -285,9 +285,9 @@ export async function handleTroublemakerDoubleLynch(
   req: Request,
   res: Response,
   componentId: string,
-): Promise<void> {
+) {
   const withoutPrefix = componentId.replace('troublemaker_double_lynch:', '');
-  const [gameId, dayStr] = withoutPrefix.split(':');
+  const [gameId, dayStr] = withoutPrefix.split(':') as [string, string];
   const requestedDay = Number(dayStr);
 
   const game = await getGame(gameId);

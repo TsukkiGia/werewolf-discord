@@ -42,7 +42,8 @@ function buildPlayersById(players: GamePlayerState[]): Map<string, GamePlayerSta
   return map;
 }
 
-const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'murder', 'potion', 'steal', 'convert', 'hunt'];
+// Only Harlot "visiting" makes a player count as away from home.
+const AWAY_ACTION_KINDS: NightActionKind[] = ['visit'];
 
 export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
   const away = new Set<string>();
@@ -133,12 +134,12 @@ export interface DoctorActionResult {
  * - If the doctor targeted a wolf: 50% chance the wolf kills the doctor in
  *   retaliation. The doctor is DM'd either way, and the channel is notified
  *   if they die.
- * - If the doctor targeted a non-wolf who was attacked and survived *at home*:
+ * - If the doctor targeted a non-wolf who was attacked and survived:
  *   they are considered saved and a rumor line is added at dawn.
  * - If the doctor targeted a non-wolf who wasn't attacked: quiet night.
- * - If the doctor targeted someone who was out for the night (based on
- *   `buildAwayPlayerIds`), the protection fizzles — the doc is told the
- *   house was empty and no save is recorded.
+ *
+ * Doctor protection applies only against direct wolf/SK-style attacks; it
+ * does not stop Chemist duels or Arsonist fire.
  */
 export async function processDoctorActions(
   players: GamePlayerState[],
@@ -154,8 +155,6 @@ export async function processDoctorActions(
   let anySaved = false;
   let killedDoctorId: string | null = null;
   let doctorDeathInfo: { doctorId: string; wolfTargetId: string } | null = null;
-
-  const awayPlayerIds = buildAwayPlayerIds(actions);
 
   await Promise.all(
     protectActions.map(async (action) => {
@@ -187,26 +186,17 @@ export async function processDoctorActions(
 
       // Standard protection — target is not a wolf.
       const isSelf = targetId === doctorId;
-      const targetAway = !isSelf && awayPlayerIds.has(targetId);
-
-      // Body-based protection: if the target is out for the night, the doctor
-      // can't actually shield them. The doc still gets a DM, but no save is
-      // recorded.
-      let saved = false;
-      if (!targetAway) {
-        saved = killTargets.includes(targetId) && !killedIds.includes(targetId);
-        if (saved) anySaved = true;
-      }
+      const saved =
+        killTargets.includes(targetId) && !killedIds.includes(targetId);
+      if (saved) anySaved = true;
 
       const content = isSelf
         ? saved
           ? 'You guarded yourself tonight. The wolves came for you, but your defenses held.'
           : 'You guarded yourself tonight. The wolves never came.'
-        : targetAway
-          ? `You went to guard <@${targetId}>, but they were out for the night. You spent the night in their empty house.`
-          : saved
-            ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
-            : `You watched over <@${targetId}>. The night passed quietly.`;
+        : saved
+          ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
+          : `You watched over <@${targetId}>. The night passed quietly.`;
 
       await safeDm(doctorId, content, 'doctor protection result');
     }),
@@ -234,8 +224,8 @@ export async function processHarlotActions(
   players: GamePlayerState[],
   visitActions: HarlotVisit[],
   wolfChosenVictimIds: string[],
+  serialKillerVictimIds: string[],
   gameId: string,
-  awayPlayerIds: Set<string>,
 ): Promise<HarlotActionResult> {
   const playersById = buildPlayersById(players);
   const killedHarlotIds: string[] = [];
@@ -247,18 +237,21 @@ export async function processHarlotActions(
       const target = playersById.get(targetId);
       if (!target) return;
 
-      const targetAway = awayPlayerIds.has(targetId);
-      const visitedWolf = WOLF_PACK_ROLES.has(target.role as RoleName) && !targetAway;
-      const visitedWolfTarget = wolfChosenVictimIds.includes(targetId);
+      const isWolfCore = WOLF_PACK_ROLES.has(target.role as RoleName);
+      const isSerialKiller = target.role === 'serial_killer';
+      const visitedWolfOrSk = isWolfCore || isSerialKiller;
+      const visitedWolfOrSkTarget =
+        wolfChosenVictimIds.includes(targetId) ||
+        serialKillerVictimIds.includes(targetId);
 
       let dmContent: string;
 
-      if (visitedWolf) {
+      if (visitedWolfOrSk) {
         await markPlayerDead(gameId, harlotId);
         killedHarlotIds.push(harlotId);
         harlotDeathInfos.push({ harlotId, targetId, cause: 'visited_wolf' });
         dmContent = harlotVisitedWolfLine(targetId);
-      } else if (visitedWolfTarget) {
+      } else if (visitedWolfOrSkTarget) {
         await markPlayerDead(gameId, harlotId);
         killedHarlotIds.push(harlotId);
         harlotDeathInfos.push({ harlotId, targetId, cause: 'visited_victim' });
@@ -270,7 +263,7 @@ export async function processHarlotActions(
       await safeDm(harlotId, dmContent, 'harlot visit result');
 
       // Notify the visited player (only on safe visits — dead players don't get DMs)
-      if (!visitedWolf && !visitedWolfTarget) {
+      if (!visitedWolfOrSk && !visitedWolfOrSkTarget) {
         await safeDm(targetId, harlotVisitNotificationLine(), 'harlot visit notification to target');
       }
     }),
@@ -438,7 +431,6 @@ export async function processArsonistActions(
             a.action_kind === 'visit' ||
             a.action_kind === 'potion' ||
             a.action_kind === 'steal' ||
-            a.action_kind === 'murder' ||
             a.action_kind === 'convert' ||
             a.action_kind === 'hunt') &&
           a.target_id === houseId
@@ -553,21 +545,41 @@ export async function processCultistActions(
 
   const cultistIds = aliveCultists.map((p) => p.user_id);
 
-  // Wolf-aligned players are immune.
-  if (target.alignment === 'wolf') {
-    await Promise.all(cultistIds.map((id) => safeDm(id, cultWolfImmuneDmLine(), 'cult wolf immune')));
-    return { converted: false, backfiredVictimId: null };
-  }
+  const isWolfAligned = target.alignment === 'wolf';
+  const isSerialKiller = target.role === 'serial_killer';
+  const isCultHunter = target.role === 'cult_hunter';
 
-  // Targeting the Cult Hunter: newest member dies instead.
-  if (target.role === 'cult_hunter') {
-    const newestId = await getNewestCultMemberId(gameId);
-    if (newestId && !killedIds.includes(newestId)) {
-      await markPlayerDead(gameId, newestId);
-      await safeDm(target.user_id, cultHunterBackfireNotifyDmLine(), 'cult hunter backfire notify');
-      return { converted: false, backfiredVictimId: newestId };
+  if (isWolfAligned || isSerialKiller || isCultHunter) {
+    // Conversion backfires: the converting cultist dies.
+    const convertingAction = actions.find(
+      (a) =>
+        a.action_kind === 'convert' &&
+        a.target_id === target.user_id &&
+        aliveCultists.some((p) => p.user_id === a.actor_id),
+    );
+    const victimId =
+      convertingAction?.actor_id ?? aliveCultists[0]!.user_id;
+
+    if (!killedIds.includes(victimId)) {
+      await markPlayerDead(gameId, victimId);
+      killedIds.push(victimId);
     }
-    return { converted: false, backfiredVictimId: null };
+
+    if (isCultHunter) {
+      await safeDm(
+        target.user_id,
+        cultHunterBackfireNotifyDmLine(),
+        'cult hunter backfire notify',
+      );
+    } else if (isWolfAligned) {
+      await Promise.all(
+        cultistIds.map((id) =>
+          safeDm(id, cultWolfImmuneDmLine(), 'cult wolf immune'),
+        ),
+      );
+    }
+
+    return { converted: false, backfiredVictimId: victimId };
   }
 
   // Successful conversion.
@@ -639,7 +651,7 @@ export async function processSerialKillerActions(
   const action = actions.find(
     (a) =>
       a.actor_id === serialKiller.user_id &&
-      a.action_kind === 'murder' &&
+      a.action_kind === 'kill' &&
       a.target_id,
   );
   if (!action || !action.target_id) return { killedIds: killedBySerialKiller };
@@ -653,9 +665,7 @@ export async function processSerialKillerActions(
     return { killedIds: killedBySerialKiller };
   }
 
-  const targetAway = awayPlayerIds.has(target.user_id);
-  const isProtectedAtHome =
-    protectedSet.has(target.user_id) && !targetAway;
+  const isProtectedAtHome = protectedSet.has(target.user_id);
 
   if (isProtectedAtHome) {
     await safeDm(

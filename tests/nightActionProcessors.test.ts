@@ -121,22 +121,12 @@ beforeEach(() => {
 });
 
 describe('buildAwayPlayerIds', () => {
-  it('collects actors for visit/kill/potion actions with targets (protect does not make doctor away)', () => {
+  it('treats only visiting actors as away (protect/kill/potion do not make actors away)', () => {
     const actions: NightActionRow[] = [
       makeAction({
         actor_id: 'visitor',
         action_kind: 'visit',
         target_id: 't1',
-      }),
-      makeAction({
-        actor_id: 'killer',
-        action_kind: 'kill',
-        target_id: 't2',
-      }),
-      makeAction({
-        actor_id: 'chemist',
-        action_kind: 'potion',
-        target_id: 't3',
       }),
       makeAction({
         actor_id: 'doctor',
@@ -158,9 +148,7 @@ describe('buildAwayPlayerIds', () => {
     ];
 
     const away = buildAwayPlayerIds(actions);
-    expect(Array.from(away).sort()).toEqual(
-      ['visitor', 'killer', 'chemist'].sort(),
-    );
+    expect(Array.from(away).sort()).toEqual(['visitor']);
     expect(away.has('doctor')).toBe(false);
     expect(away.has('seer')).toBe(false);
     expect(away.has('noTarget')).toBe(false);
@@ -224,7 +212,7 @@ describe('processDoctorActions', () => {
     expect(markPlayerDeadMock).not.toHaveBeenCalled();
 
     expect(sentMessages).toHaveLength(1);
-    expect(sentMessages[0]!.content).toContain('out for the night');
+    expect(sentMessages[0]!.content).toContain('night passed quietly');
   });
 
   it('kills the doctor when protecting a wolf and the retaliation roll succeeds', async () => {
@@ -339,7 +327,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'w' }];
 
-    const res = await processHarlotActions(players, visits, [], 'g', new Set());
+    const res = await processHarlotActions(players, visits, [], [], 'g');
 
     expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'h');
     expect(res.killedHarlotIds).toEqual(['h']);
@@ -361,7 +349,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'v' }];
 
-    const res = await processHarlotActions(players, visits, ['v'], 'g', new Set());
+    const res = await processHarlotActions(players, visits, ['v'], [], 'g');
 
     expect(markPlayerDeadMock).toHaveBeenCalledWith('g', 'h');
     expect(res.killedHarlotIds).toEqual(['h']);
@@ -381,7 +369,7 @@ describe('processHarlotActions', () => {
 
     const visits: HarlotVisit[] = [{ harlotId: 'h', targetId: 'v' }];
 
-    const res = await processHarlotActions(players, visits, [], 'g', new Set());
+    const res = await processHarlotActions(players, visits, [], [], 'g');
 
     expect(res.killedHarlotIds).toEqual([]);
     expect(res.harlotDeathInfos).toEqual([]);
@@ -405,7 +393,7 @@ describe('processHarlotActions', () => {
     // Mark the wolf as "away" (e.g., out hunting) so the harlot finds an empty house.
     const awayIds = new Set<string>(['w']);
 
-    const res = await processHarlotActions(players, visits, [], 'g', awayIds);
+    const res = await processHarlotActions(players, visits, [], [], 'g');
 
     expect(res.killedHarlotIds).toEqual([]);
     expect(res.harlotDeathInfos).toEqual([]);

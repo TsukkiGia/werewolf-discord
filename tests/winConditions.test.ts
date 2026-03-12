@@ -118,6 +118,6 @@ describe('buildWinLines', () => {
       wolves: [],
       cultists: [],
     });
-    expect(lines[0].toLowerCase()).toContain('serial killer');
+    expect(lines[0]!.toLowerCase()).toContain('serial killer');
   });
 });
