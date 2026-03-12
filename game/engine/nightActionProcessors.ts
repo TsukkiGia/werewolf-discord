@@ -10,6 +10,9 @@ import {
   harlotVisitedTargetLine,
   harlotSafeVisitLine,
   harlotVisitNotificationLine,
+  doctorSavedTargetLine,
+  serialKillerKillDmLine,
+  serialKillerVictimDmLine,
   thiefNewRoleDmLine,
   thiefTargetDmLine,
   cultConvertedDmLine,
@@ -39,7 +42,7 @@ function buildPlayersById(players: GamePlayerState[]): Map<string, GamePlayerSta
   return map;
 }
 
-const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'potion', 'protect', 'steal', 'convert', 'hunt'];
+const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'murder', 'potion', 'protect', 'steal', 'convert', 'hunt'];
 
 export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
   const away = new Set<string>();
@@ -434,7 +437,10 @@ export async function processArsonistActions(
           (a.action_kind === 'protect' ||
             a.action_kind === 'visit' ||
             a.action_kind === 'potion' ||
-            a.action_kind === 'steal') &&
+            a.action_kind === 'steal' ||
+            a.action_kind === 'murder' ||
+            a.action_kind === 'convert' ||
+            a.action_kind === 'hunt') &&
           a.target_id === houseId
         ) {
           if (!burnedKinds.has(a.actor_id) && !killedIds.includes(a.actor_id)) {
@@ -558,7 +564,6 @@ export async function processCultistActions(
     const newestId = await getNewestCultMemberId(gameId);
     if (newestId && !killedIds.includes(newestId)) {
       await markPlayerDead(gameId, newestId);
-      killedIds.push(newestId);
       await safeDm(target.user_id, cultHunterBackfireNotifyDmLine(), 'cult hunter backfire notify');
       return { converted: false, backfiredVictimId: newestId };
     }
@@ -610,9 +615,74 @@ export async function processCultHunterActions(
 
   if (!killedIds.includes(target.user_id)) {
     await markPlayerDead(gameId, target.user_id);
-    killedIds.push(target.user_id);
   }
 
   await safeDm(hunter.user_id, cultHunterCultistKilledDmLine(target.user_id), 'cult hunter kill');
   return { killedCultistId: target.user_id };
+}
+
+export async function processSerialKillerActions(
+  gameId: string,
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+  killedIds: string[],
+  protectedSet: Set<string>,
+  awayPlayerIds: Set<string>,
+): Promise<{ killedIds: string[] }> {
+  const killedBySerialKiller: string[] = [];
+
+  const serialKiller = players.find(
+    (p) => p.is_alive && p.role === 'serial_killer',
+  );
+  if (!serialKiller) return { killedIds: killedBySerialKiller };
+
+  const action = actions.find(
+    (a) =>
+      a.actor_id === serialKiller.user_id &&
+      a.action_kind === 'murder' &&
+      a.target_id,
+  );
+  if (!action || !action.target_id) return { killedIds: killedBySerialKiller };
+
+  const target = players.find(
+    (p) => p.user_id === action.target_id && p.is_alive,
+  );
+  if (!target) return { killedIds: killedBySerialKiller };
+
+  if (killedIds.includes(target.user_id)) {
+    return { killedIds: killedBySerialKiller };
+  }
+
+  const targetAway = awayPlayerIds.has(target.user_id);
+  const isProtectedAtHome =
+    protectedSet.has(target.user_id) && !targetAway;
+
+  if (isProtectedAtHome) {
+    await safeDm(
+      serialKiller.user_id,
+      'You struck from the shadows, but someone was already guarding your target. Your kill was stopped by a doctor.',
+      'serial killer blocked by doctor',
+    );
+    await safeDm(
+      target.user_id,
+      doctorSavedTargetLine(),
+      'doctor saved from serial killer',
+    );
+    return { killedIds: killedBySerialKiller };
+  }
+
+  await safeDm(
+    serialKiller.user_id,
+    serialKillerKillDmLine(target.user_id),
+    'serial killer kill',
+  );
+  await safeDm(
+    target.user_id,
+    serialKillerVictimDmLine(),
+    'serial killer victim',
+  );
+
+  killedBySerialKiller.push(target.user_id);
+
+  return { killedIds: killedBySerialKiller };
 }

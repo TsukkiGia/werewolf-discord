@@ -4,11 +4,12 @@ import {
   townWinLine,
   wolfWinLine,
   arsonistWinLine,
+  serialKillerWinLine,
   cultWinLine,
   revealCultistsLine,
 } from '../strings/narration.js';
 
-export type WinSide = 'wolves' | 'town' | 'arsonist' | 'cult';
+export type WinSide = 'wolves' | 'town' | 'arsonist' | 'serial_killer' | 'cult';
 
 export interface WinResult {
   winner: WinSide;
@@ -43,6 +44,8 @@ export function buildWinLines(win: WinResult): string[] {
     lines.push(cultWinLine());
     const cultMentions = win.cultists.map((p) => `<@${p.user_id}>`).join(', ');
     if (cultMentions) lines.push(revealCultistsLine(cultMentions));
+  } else if (win.winner === 'serial_killer') {
+    lines.push(serialKillerWinLine());
   } else {
     lines.push(arsonistWinLine());
   }
@@ -72,8 +75,21 @@ export function evaluateWinCondition(players: GamePlayerState[]): WinResult | nu
   const wolfPlayers = players.filter((p) => p.alignment === 'wolf');
   const cultPlayers = players.filter((p) => p.alignment === 'cult');
 
-  // Arsonist wins if they are the only player left alive.
+  const serialKillersAlive = alive.filter(
+    (p) => p.role === 'serial_killer',
+  ).length;
   const arsonistsAlive = alive.filter((p) => p.role === 'arsonist').length;
+
+  // Serial Killer wins if they are the only player left alive.
+  if (alive.length === 1 && serialKillersAlive === 1) {
+    return {
+      winner: 'serial_killer',
+      wolves: wolfPlayers,
+      cultists: cultPlayers,
+    };
+  }
+
+  // Arsonist wins if they are the only player left alive.
   if (alive.length === 1 && arsonistsAlive === 1) {
     return { winner: 'arsonist', wolves: wolfPlayers, cultists: cultPlayers };
   }
@@ -84,7 +100,13 @@ export function evaluateWinCondition(players: GamePlayerState[]): WinResult | nu
   }
 
   // Town wins if no wolves and no cultists are alive.
-  if (wolvesAlive === 0 && cultsAlive === 0 && wolfPlayers.length > 0 && arsonistsAlive === 0) {
+  if (
+    wolvesAlive === 0 &&
+    cultsAlive === 0 &&
+    wolfPlayers.length > 0 &&
+    arsonistsAlive === 0 &&
+    serialKillersAlive === 0
+  ) {
     return { winner: 'town', wolves: wolfPlayers, cultists: cultPlayers };
   }
 

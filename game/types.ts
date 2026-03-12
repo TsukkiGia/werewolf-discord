@@ -14,6 +14,7 @@ export type RoleName =
   | 'clumsy_guy'
   | 'chemist'
   | 'arsonist'
+  | 'serial_killer'
   | 'tanner'
   | 'traitor'
   | 'thief'
@@ -50,7 +51,7 @@ export interface RoleIntroContext {
   allAssignments: AssignedRole[];
 }
 
-export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion' | 'ignite' | 'link' | 'steal' | 'convert' | 'hunt';
+export type NightActionKind = 'none' | 'kill' | 'murder' | 'inspect' | 'protect' | 'visit' | 'potion' | 'ignite' | 'link' | 'steal' | 'convert' | 'hunt';
 
 export interface NightActionDefinition {
   kind: NightActionKind;

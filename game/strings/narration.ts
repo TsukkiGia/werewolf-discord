@@ -125,6 +125,15 @@ export function arsonistWinLine(): string {
   return pickRandom(variants);
 }
 
+export function serialKillerWinLine(): string {
+  const variants = [
+    'When the screams finally stop, only the Serial Killer remains. Everyone else is dead — the Serial Killer wins alone.',
+    'The village is quiet now, its factions shattered. One figure walks away from the ruin: the Serial Killer. They win.',
+    'All wolves, villagers, and zealots are gone. Only the Serial Killer is left standing. Their bloody work is complete — they win.',
+  ];
+  return pickRandom(variants);
+}
+
 export function loversWinAloneLine(loverAId: string, loverBId: string): string {
   const variants = [
     `In the end, only two hearts are still beating. <@${loverAId}> and <@${loverBId}> stand alone together — the Lovers win the game.`,
@@ -256,6 +265,24 @@ export function wolfKillDmLine(): string {
   return pickRandom(variants);
 }
 
+export function serialKillerKillDmLine(targetId: string): string {
+  const variants = [
+    `You stalked <@${targetId}> through the dark and struck when no one was watching. Another body hits the ground.`,
+    `You followed <@${targetId}> like a shadow until the perfect moment. One quick, practiced blow — they will not see dawn.`,
+    `You drifted behind <@${targetId}> all night, waiting. When the village slept deepest, your knife found its mark.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function serialKillerVictimDmLine(): string {
+  const variants = [
+    'You never heard footsteps behind you — only the sudden pain of steel in the dark. A lone killer ended your story tonight.',
+    'Something moved just outside your vision, then cold metal slid between your ribs. You died to a silent killer in the night.',
+    'There was no howl, no shouting mob — only a shadow and a flash of a blade. The Serial Killer claimed you in the dark.',
+  ];
+  return pickRandom(variants);
+}
+
 export function wolfCubDeathPackLine(cubId: string): string {
   const variants = [
     `A young howl goes silent. The Wolf Cub <@${cubId}> has fallen, and the pack feels the loss like a wound.`,
@@ -310,6 +337,33 @@ export function chemistTargetDeathLine(victimId: string): string {
   return pickRandom(variants);
 }
 
+export function serialKillerVictimDeathLine(victimId: string): string {
+  const variants = [
+    `<@${victimId}> is found in a quiet corner, the ground dark with blood and no wolf tracks in sight.`,
+    `At dawn, the village discovers <@${victimId}>'s body hidden away from the main paths — killed cleanly by an unseen hand.`,
+    `There are no signs of fire or fangs around <@${victimId}>'s corpse, only careful stab wounds. A lone killer has been at work.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function skFoughtBackDmLine(): string {
+  const variants = [
+    'The wolves came for you in the night. They chose the wrong target — one of them is dead, and you are still breathing.',
+    'Something moved in the shadows outside your door. You were ready. One wolf came close enough to touch, and that was their mistake.',
+    "You heard them coming before they reached you. By the time it was over, you'd left one wolf bleeding in the dark.",
+  ];
+  return pickRandom(variants);
+}
+
+export function skCounterKillWolfDmLine(wolfId: string): string {
+  const variants = [
+    `Your pack moved on the Serial Killer tonight. It was a mistake — <@${wolfId}> didn't make it back.`,
+    `You hunted the Serial Killer as a pack. The killer was ready. <@${wolfId}> paid for it with their life.`,
+    `The Serial Killer turned the hunt around on you. <@${wolfId}> is dead. Choose your targets more carefully.`,
+  ];
+  return pickRandom(variants);
+}
+
 export function loverSorrowDeathLine(victimId: string, partnerId: string | undefined): string {
   const partnerMention = partnerId ? `<@${partnerId}>` : 'their lost lover';
   const variants = [
@@ -334,6 +388,15 @@ export function arsonistFireAwayDeathLine(victimId: string): string {
     `<@${victimId}> is found near the smoldering remains of their home, the shock of returning to a burned-out shell written on their face.`,
     `By dawn, <@${victimId}>'s house is a blackened shell — and <@${victimId}> lies dead nearby, never having made it inside before the blaze consumed everything.`,
     `The village wakes to the smell of ash. <@${victimId}>'s home is gone, and so is <@${victimId}> — the fire claimed them when they came back to nothing but ruin.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function wolfStabbedBySerialKillerLine(wolfId: string): string {
+  const variants = [
+    `One of the wolves did not return from the hunt. <@${wolfId}> is found torn open by **knives**, not claws.`,
+    `The pack’s ranks are thinner this morning. <@${wolfId}>'s body bears deep stab wounds — someone turned the hunt around on them.`,
+    `Rumor spreads that a wolf died in the night, not by fire or villagers, but by cold, precise stab wounds. <@${wolfId}> will howl no more.`,
   ];
   return pickRandom(variants);
 }

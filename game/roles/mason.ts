@@ -3,6 +3,7 @@ import type { RoleDefinition, RoleIntroContext } from '../types.js';
 export const MasonRole: RoleDefinition = {
   name: 'mason',
   alignment: 'town',
+  unique: false,
   description:
     'A townsperson who belongs to a secret brotherhood. ' +
     'At game start all masons are revealed to each other via DM — confirmed town trust with no night action needed. ' +

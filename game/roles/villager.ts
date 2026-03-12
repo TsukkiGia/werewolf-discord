@@ -3,6 +3,7 @@ import type { RoleDefinition, RoleIntroContext } from '../types.js';
 export const VillagerRole: RoleDefinition = {
   name: 'villager',
   alignment: 'town',
+  unique: false,
   description:
     'An ordinary townsperson with no special powers. ' +
     'Participates in the day vote to lynch suspected wolves. ' +

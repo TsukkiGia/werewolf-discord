@@ -228,3 +228,175 @@ describe('maybeResolveNight — wolf kills with home/away and visitors', () => {
     expect(killedIds).toEqual(['chem', 'v'].sort());
   });
 });
+
+describe('maybeResolveNight — wolves vs Serial Killer', () => {
+  it('can sometimes kill the Serial Killer when they are home', async () => {
+    getGameMock.mockResolvedValue({
+      id: 'g1',
+      status: 'night',
+      current_night: 1,
+      current_day: 0,
+      wolf_extra_kills_next_night: 0,
+      channel_id: 'channel:g1',
+    });
+
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'wolf', role: 'werewolf', alignment: 'wolf' }),
+      makePlayer({
+        user_id: 'sk',
+        role: 'serial_killer',
+        alignment: 'neutral',
+      }),
+    ];
+
+    getPlayersForGameMock
+      .mockResolvedValueOnce(players)
+      .mockResolvedValueOnce(players);
+
+    const actions: NightActionRow[] = [
+      // Wolf targets the Serial Killer at home.
+      makeAction({
+        id: 1,
+        actor_id: 'wolf',
+        target_id: 'sk',
+        action_kind: 'kill',
+        role: 'werewolf',
+      }),
+    ];
+    getNightActionsForNightMock.mockResolvedValue(actions);
+
+    evaluateNightResolutionMock.mockReturnValue({
+      state: 'ready',
+      killTargets: ['sk'],
+      protectTargets: [],
+      visitActions: [],
+    });
+
+    advancePhaseMock.mockResolvedValue('day');
+
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.1);
+
+    await maybeResolveNight('g1');
+
+    randomSpy.mockRestore();
+
+    const killedIds = markPlayerDeadMock.mock.calls.map(([, id]) => id).sort();
+    expect(killedIds).toEqual(['sk']);
+  });
+
+  it('usually causes a wolf to die when they attack the Serial Killer at home', async () => {
+    getGameMock.mockResolvedValue({
+      id: 'g1',
+      status: 'night',
+      current_night: 1,
+      current_day: 0,
+      wolf_extra_kills_next_night: 0,
+      channel_id: 'channel:g1',
+    });
+
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'wolf', role: 'werewolf', alignment: 'wolf' }),
+      makePlayer({
+        user_id: 'sk',
+        role: 'serial_killer',
+        alignment: 'neutral',
+      }),
+    ];
+
+    getPlayersForGameMock
+      .mockResolvedValueOnce(players)
+      .mockResolvedValueOnce(players);
+
+    const actions: NightActionRow[] = [
+      makeAction({
+        id: 1,
+        actor_id: 'wolf',
+        target_id: 'sk',
+        action_kind: 'kill',
+        role: 'werewolf',
+      }),
+    ];
+    getNightActionsForNightMock.mockResolvedValue(actions);
+
+    evaluateNightResolutionMock.mockReturnValue({
+      state: 'ready',
+      killTargets: ['sk'],
+      protectTargets: [],
+      visitActions: [],
+    });
+
+    advancePhaseMock.mockResolvedValue('day');
+
+    const randomSpy = vi.spyOn(Math, 'random').mockReturnValue(0.8);
+
+    await maybeResolveNight('g1');
+
+    randomSpy.mockRestore();
+
+    const killedIds = markPlayerDeadMock.mock.calls.map(([, id]) => id).sort();
+    expect(killedIds).toEqual(['wolf']);
+  });
+
+  it('misses the Serial Killer when they are away, even if targeted', async () => {
+    getGameMock.mockResolvedValue({
+      id: 'g1',
+      status: 'night',
+      current_night: 1,
+      current_day: 0,
+      wolf_extra_kills_next_night: 0,
+      channel_id: 'channel:g1',
+    });
+
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'wolf', role: 'werewolf', alignment: 'wolf' }),
+      makePlayer({
+        user_id: 'sk',
+        role: 'serial_killer',
+        alignment: 'neutral',
+      }),
+      makePlayer({ user_id: 'v', role: 'villager', alignment: 'town' }),
+    ];
+
+    getPlayersForGameMock
+      .mockResolvedValueOnce(players)
+      .mockResolvedValueOnce(players);
+
+    const actions: NightActionRow[] = [
+      // Wolf hunts the Serial Killer.
+      makeAction({
+        id: 1,
+        actor_id: 'wolf',
+        target_id: 'sk',
+        action_kind: 'kill',
+        role: 'werewolf',
+      }),
+      // Serial Killer is out killing v, so they are "away".
+      makeAction({
+        id: 2,
+        actor_id: 'sk',
+        target_id: 'v',
+        action_kind: 'murder',
+        role: 'serial_killer',
+      }),
+    ];
+    getNightActionsForNightMock.mockResolvedValue(actions);
+
+    evaluateNightResolutionMock.mockReturnValue({
+      state: 'ready',
+      killTargets: ['sk'],
+      protectTargets: [],
+      visitActions: [],
+    });
+
+    advancePhaseMock.mockResolvedValue('day');
+
+    await maybeResolveNight('g1');
+
+    const killedIds = markPlayerDeadMock.mock.calls
+      .map(([, id]) => id)
+      .sort();
+    // Wolves should miss the Serial Killer because they are away,
+    // but the Serial Killer should still successfully kill their own target.
+    expect(killedIds).toEqual(['v']);
+  });
+});

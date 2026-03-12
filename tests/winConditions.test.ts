@@ -68,6 +68,31 @@ describe('evaluateWinCondition', () => {
     expect(win).toBeNull();
   });
 
+  it('returns serial killer win when they are the only player alive', () => {
+    const players: GamePlayerState[] = [
+      makePlayer({
+        user_id: 'sk',
+        alignment: 'neutral',
+        is_alive: true,
+        role: 'serial_killer',
+      }),
+      // dead wolf for reveal list
+      makePlayer({
+        user_id: 'w1',
+        alignment: 'wolf',
+        is_alive: false,
+        role: 'werewolf',
+      }),
+    ];
+
+    const win = evaluateWinCondition(players);
+    expect(win).not.toBeNull();
+    if (win) {
+      expect(win.winner).toBe('serial_killer');
+      expect(win.wolves.map((p) => p.user_id)).toEqual(['w1']);
+    }
+  });
+
 });
 
 describe('buildWinLines', () => {
@@ -77,9 +102,22 @@ describe('buildWinLines', () => {
       makePlayer({ user_id: 'w2', alignment: 'wolf', role: 'werewolf' }),
     ];
 
-    const lines = buildWinLines({ winner: 'wolves', wolves: players });
+    const lines = buildWinLines({
+      winner: 'wolves',
+      wolves: players,
+      cultists: [],
+    });
     expect(lines[0]).toContain('Wolves win');
     expect(lines[1]).toContain('<@w1>');
     expect(lines[1]).toContain('<@w2>');
+  });
+
+  it('includes serial killer winner text', () => {
+    const lines = buildWinLines({
+      winner: 'serial_killer',
+      wolves: [],
+      cultists: [],
+    });
+    expect(lines[0].toLowerCase()).toContain('serial killer');
   });
 });

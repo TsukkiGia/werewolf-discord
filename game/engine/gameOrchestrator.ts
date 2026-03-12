@@ -25,6 +25,7 @@ import {
   processThiefActions,
   processCultistActions,
   processCultHunterActions,
+  processSerialKillerActions,
   buildAwayPlayerIds,
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
@@ -64,6 +65,8 @@ import {
   arsonistFireHomeDeathLine,
   arsonistFireAwayDeathLine,
   arsonistIgniteLine,
+  serialKillerVictimDeathLine,
+  wolfStabbedBySerialKillerLine,
   deathSummary,
   wolfKillDmLine,
   alphaWolfTurnedYouLine,
@@ -77,6 +80,8 @@ import {
   cultGainedMemberLine,
   cultBackfiredLine,
   cultHunterKilledLine,
+  skFoughtBackDmLine,
+  skCounterKillWolfDmLine,
 } from '../strings/narration.js';
 
 type NightDeathCause =
@@ -90,7 +95,9 @@ type NightDeathCause =
   | 'arsonist_fire_away'
   | 'lover_sorrow'
   | 'cult_backfire'
-  | 'cult_hunter_kill';
+  | 'cult_hunter_kill'
+  | 'serial_killer'
+  | 'serial_killer_wolf_counter';
 
 interface NightDeathInfo {
   playerId: string;
@@ -516,6 +523,26 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         lines.push(cultHunterKilledLine(death.playerId));
         break;
       }
+      case 'serial_killer': {
+        const victim = playersById.get(death.playerId);
+        if (victim) {
+          lines.push(
+            serialKillerVictimDeathLine(victim.user_id) +
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
+          );
+        }
+        break;
+      }
+      case 'serial_killer_wolf_counter': {
+        const victim = playersById.get(death.playerId);
+        if (victim) {
+          lines.push(
+            wolfStabbedBySerialKillerLine(victim.user_id) +
+              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
+          );
+        }
+        break;
+      }
     }
   }
 
@@ -665,6 +692,80 @@ async function resolveNightActionsAndCollectDeaths(params: {
       continue;
     }
 
+    const targetPlayer = playersById.get(targetId);
+    if (targetPlayer?.role === 'serial_killer') {
+      const packMates = players.filter(
+        (p) =>
+          p.is_alive &&
+          !killedIds.includes(p.user_id) &&
+          WOLF_PACK_ROLES.has(p.role as RoleName),
+      );
+
+      if (packMates.length > 0) {
+        const roll = Math.random();
+        if (roll < 0.2) {
+          // Wolves manage to kill the Serial Killer.
+          if (!killedIds.includes(targetId)) {
+            killedIds.push(targetId);
+            await markPlayerDead(gameId, targetId);
+            nightDeaths.push({ playerId: targetId, cause: 'wolf_kill' });
+            try {
+              const dmChannelId = await openDmChannel(targetId);
+              await postChannelMessage(dmChannelId, {
+                content: wolfKillDmLine(),
+              });
+            } catch (err) {
+              console.error('Failed to DM wolf kill victim (serial killer)', gameId, targetId, err);
+            }
+          }
+        } else {
+          // Serial Killer fends off the attack and kills a random wolf instead.
+          const wolfToKill = packMates[Math.floor(Math.random() * packMates.length)]!;
+          if (!killedIds.includes(wolfToKill.user_id)) {
+            killedIds.push(wolfToKill.user_id);
+            await markPlayerDead(gameId, wolfToKill.user_id);
+            nightDeaths.push({
+              playerId: wolfToKill.user_id,
+              cause: 'serial_killer_wolf_counter',
+            });
+            // DM the dying wolf.
+            try {
+              const dmChannelId = await openDmChannel(wolfToKill.user_id);
+              await postChannelMessage(dmChannelId, {
+                content:
+                  'You lunged for your prey, but steel flashed in the dark. A knife found you before your fangs could.',
+              });
+            } catch (err) {
+              console.error('Failed to DM wolf stabbed by serial killer', gameId, wolfToKill.user_id, err);
+            }
+            // DM the SK that they survived.
+            try {
+              const dmChannelId = await openDmChannel(targetId);
+              await postChannelMessage(dmChannelId, { content: skFoughtBackDmLine() });
+            } catch (err) {
+              console.error('Failed to DM SK counter-kill survival', gameId, targetId, err);
+            }
+            // DM surviving pack members.
+            const survivingPack = packMates.filter((p) => p.user_id !== wolfToKill.user_id);
+            await Promise.all(
+              survivingPack.map(async (wolf) => {
+                try {
+                  const dmChannelId = await openDmChannel(wolf.user_id);
+                  await postChannelMessage(dmChannelId, {
+                    content: skCounterKillWolfDmLine(wolfToKill.user_id),
+                  });
+                } catch (err) {
+                  console.error('Failed to DM pack about SK counter-kill', gameId, wolf.user_id, err);
+                }
+              }),
+            );
+          }
+        }
+        continue;
+      }
+      // If somehow no pack mates are alive, fall through to normal wolf logic.
+    }
+
     // Alpha Wolf bite: 20% chance to convert the primary target instead of killing.
     // Only applies to the first chosen victim, and only to non-wolf-aligned players.
     if (
@@ -713,7 +814,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
 
     for (const a of actions) {
       if (
-        (a.action_kind === 'visit' || a.action_kind === 'potion' || a.action_kind === 'steal' || a.action_kind === 'convert' || a.action_kind === 'hunt') &&
+        (a.action_kind === 'visit' || a.action_kind === 'potion' || a.action_kind === 'steal' || a.action_kind === 'murder' || a.action_kind === 'convert' || a.action_kind === 'hunt') &&
         a.target_id === targetId &&
         !harlotIds.has(a.actor_id)
       ) {
@@ -848,6 +949,23 @@ async function resolveNightActionsAndCollectDeaths(params: {
   if (killedCultistId && !killedIds.includes(killedCultistId)) {
     killedIds.push(killedCultistId);
     nightDeaths.push({ playerId: killedCultistId, cause: 'cult_hunter_kill' });
+  }
+
+  // --- Serial Killer actions ---
+  const serialKillerResult = await processSerialKillerActions(
+    gameId,
+    players,
+    actions,
+    killedIds,
+    protectedSet,
+    awayPlayerIds,
+  );
+  for (const id of serialKillerResult.killedIds) {
+    if (!killedIds.includes(id)) {
+      killedIds.push(id);
+      await markPlayerDead(gameId, id);
+      nightDeaths.push({ playerId: id, cause: 'serial_killer' });
+    }
   }
 
   // Refresh player state post-kills

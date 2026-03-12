@@ -13,6 +13,7 @@ import { HarlotRole } from '../roles/harlot.js';
 import { ClumsyGuyRole } from '../roles/clumsyGuy.js';
 import { ChemistRole } from '../roles/chemist.js';
 import { ArsonistRole } from '../roles/arsonist.js';
+import { SerialKillerRole } from '../roles/serialKiller.js';
 import { CupidRole } from '../roles/cupid.js';
 import { TannerRole } from '../roles/tanner.js';
 import { TraitorRole } from '../roles/traitor.js';
@@ -37,6 +38,7 @@ export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
   clumsy_guy: ClumsyGuyRole,
   chemist: ChemistRole,
   arsonist: ArsonistRole,
+  serial_killer: SerialKillerRole,
   cupid: CupidRole,
   traitor: TraitorRole,
   tanner: TannerRole,

@@ -4,6 +4,7 @@ import { WOLF_PACK_ROLES } from '../types.js';
 export const WerewolfRole: RoleDefinition = {
   name: 'werewolf',
   alignment: 'wolf',
+  unique: false,
   description:
     'Hunts with the wolf pack each night. The pack collectively submits a kill target via DM; ' +
     'if they disagree, a random vote from the pack is chosen. ' +
