@@ -669,7 +669,7 @@ export async function processSerialKillerActions(
   actions: NightActionRow[],
   killedIds: string[],
   protectedSet: Set<string>,
-  awayPlayerIds: Set<string>,
+  wolfChosenVictims: string[],
 ): Promise<{ killedIds: string[] }> {
   const killedBySerialKiller: string[] = [];
 
@@ -677,6 +677,12 @@ export async function processSerialKillerActions(
     (p) => p.is_alive && p.role === 'serial_killer',
   );
   if (!serialKiller) return { killedIds: killedBySerialKiller };
+
+  // If the Serial Killer already died earlier this night (e.g. to wolves,
+  // arsonist, or a duel), they don't get to complete their own kill.
+  if (killedIds.includes(serialKiller.user_id)) {
+    return { killedIds: killedBySerialKiller };
+  }
 
   const action = actions.find(
     (a) =>
@@ -692,6 +698,20 @@ export async function processSerialKillerActions(
   if (!target) return { killedIds: killedBySerialKiller };
 
   if (killedIds.includes(target.user_id)) {
+    return { killedIds: killedBySerialKiller };
+  }
+
+  const targetIsWolfPack = WOLF_PACK_ROLES.has(target.role as RoleName);
+  const wolvesTargetedSerialKiller = wolfChosenVictims.includes(
+    serialKiller.user_id,
+  );
+
+  // Special SK vs wolf interaction: when the Serial Killer chooses a wolf-pack
+  // member *and* the wolves choose the Serial Killer as their victim, the duel
+  // is resolved entirely in the wolf phase (20% SK dies, 80% a random wolf
+  // dies). In that case, skip the Serial Killer's own kill here to avoid
+  // double-killing or double-reporting.
+  if (targetIsWolfPack && wolvesTargetedSerialKiller) {
     return { killedIds: killedBySerialKiller };
   }
 

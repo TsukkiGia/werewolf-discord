@@ -1007,7 +1007,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
     actions,
     killedIds,
     protectedSet,
-    awayPlayerIds,
+    wolfChosenVictims,
   );
   for (const id of serialKillerResult.killedIds) {
     if (!killedIds.includes(id)) {

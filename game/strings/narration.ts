@@ -139,6 +139,7 @@ export function serialKillerWinLine(): string {
     'When the screams finally stop, only the Serial Killer remains. Everyone else is dead — the Serial Killer wins alone.',
     'The village is quiet now, its factions shattered. One figure walks away from the ruin: the Serial Killer. They win.',
     'All wolves, villagers, and zealots are gone. Only the Serial Killer is left standing. Their bloody work is complete — they win.',
+    'In the end there were only two left; now one body cools on the ground, and the Serial Killer wipes the blade clean. Everyone else has been slaughtered.',
   ];
   return pickRandom(variants);
 }

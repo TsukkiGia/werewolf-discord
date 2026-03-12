@@ -93,6 +93,29 @@ describe('evaluateWinCondition', () => {
     }
   });
 
+  it('returns serial killer win over wolves in a 1v1 endgame', () => {
+    const players: GamePlayerState[] = [
+      makePlayer({
+        user_id: 'sk',
+        alignment: 'neutral',
+        is_alive: true,
+        role: 'serial_killer',
+      }),
+      makePlayer({
+        user_id: 'w1',
+        alignment: 'wolf',
+        is_alive: true,
+        role: 'werewolf',
+      }),
+    ];
+
+    const win = evaluateWinCondition(players);
+    expect(win).not.toBeNull();
+    if (win) {
+      expect(win.winner).toBe('serial_killer');
+    }
+  });
+
 });
 
 describe('buildWinLines', () => {

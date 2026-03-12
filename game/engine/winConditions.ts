@@ -80,12 +80,9 @@ export function evaluateWinCondition(players: GamePlayerState[]): WinResult | nu
   ).length;
   const arsonistsAlive = alive.filter((p) => p.role === 'arsonist').length;
 
-  // Serial Killer vs wolves 1v1: the Serial Killer wins this duel.
-  if (
-    alive.length === 2 &&
-    serialKillersAlive === 1 &&
-    wolvesAlive === 1
-  ) {
+  // Serial Killer wins immediately in any 1v1 endgame where they are one
+  // of the two remaining players.
+  if (alive.length === 2 && serialKillersAlive === 1) {
     return {
       winner: 'serial_killer',
       wolves: wolfPlayers,
