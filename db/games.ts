@@ -1,6 +1,6 @@
 import { pool } from './client.js';
 
-export type GameStatus = 'lobby' | 'night' | 'day' | 'ended';
+export type GameStatus = 'lobby' | 'night' | 'day' | 'day_second_lynch' | 'ended';
 
 export interface GameRow {
   id: string;
@@ -121,6 +121,20 @@ export async function setTroublemakerDoubleLynchDay(
   return (result.rowCount ?? 0) > 0;
 }
 
+/**
+ * Atomically transitions a game from 'day' to 'day_second_lynch' without
+ * incrementing any counters. Used to start the second voting round on a
+ * double-lynch day while keeping the same day number.
+ * Returns true if the transition succeeded (i.e. game was in 'day').
+ */
+export async function beginSecondLynchPhase(gameId: string): Promise<boolean> {
+  const result = await pool.query(
+    `UPDATE games SET status = 'day_second_lynch' WHERE id = $1 AND status = 'day'`,
+    [gameId],
+  );
+  return (result.rowCount ?? 0) > 0;
+}
+
 export async function endGame(gameId: string): Promise<void> {
   const endedAt = Date.now();
   await pool.query(
@@ -155,6 +169,7 @@ export function nextPhase(status: GameStatus): GameStatus {
   if (status === 'lobby') return 'night';
   if (status === 'night') return 'day';
   if (status === 'day') return 'night';
+  if (status === 'day_second_lynch') return 'night';
   return status;
 }
 
@@ -188,6 +203,8 @@ export async function advancePhase(
   } else if (currentStatus === 'night' && newStatus === 'day') {
     newDay += 1;
   } else if (currentStatus === 'day' && newStatus === 'night') {
+    newNight += 1;
+  } else if (currentStatus === 'day_second_lynch' && newStatus === 'night') {
     newNight += 1;
   }
 

@@ -5,6 +5,7 @@ import {
   markPlayerDead,
   setPlayerRoleAndAlignment,
   advancePhase,
+  beginSecondLynchPhase,
   endGame,
   getVotesForDay,
   getPendingHunterShot,
@@ -15,6 +16,7 @@ import {
 } from '../../db.js';
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
+import type { GameRow } from '../../db/games.js';
 import { WOLF_PACK_ROLES, type RoleName, type NightDeathInfo } from '../types.js';
 import {
   processSeerActions,
@@ -30,7 +32,7 @@ import {
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { evaluateNightResolution } from './nightResolution.js';
-import { evaluateDayResolution, chooseLynchVictim } from './dayResolution.js';
+import { evaluateDayResolution } from './dayResolution.js';
 import { evaluateWinCondition, buildWinLines } from './winConditions.js';
 import type { WinResult } from './winConditions.js';
 import {
@@ -334,11 +336,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
         // Call out the Hunter's final stand before listing the full night summary.
         lines.splice(1, 0, hunterTriggerLine(), hunterResolveLine());
         if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
-        try {
-          await postChannelMessage(game.channel_id, { content: lines.join('\n') });
-        } catch (err) {
-          console.error('Failed to send dawn message', err);
-        }
+        await safePostToChannel(game.channel_id, lines, 'dawn message');
       }
       await triggerHunterShot({ game, hunterId: killedHunter.user_id, continuation: `day:${upcomingDay}`, alivePlayers });
       return;
@@ -365,11 +363,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
         lines.push(buildDayStartLine(upcomingDay));
       }
 
-      try {
-        await postChannelMessage(game.channel_id, { content: lines.join('\n') });
-      } catch (err) {
-        console.error('Failed to send day summary message', err);
-      }
+      await safePostToChannel(game.channel_id, lines, 'day summary message');
     }
 
     if (win) {
@@ -773,6 +767,46 @@ async function notifyWolfCubPackDeath(
   await incrementWolfExtraKillsForNextNight(gameId);
 }
 
+/** Formats a lover sorrow death line with alignment reveal, used in lynch and hunter-shot narration. */
+function formatSorrowDeathLine(victim: GamePlayerState, partnerId: string | null | undefined): string {
+  return (
+    loverSorrowDeathLine(victim.user_id, partnerId ?? undefined) +
+    ` They were ${deathSummary(victim.alignment, victim.role)}.`
+  );
+}
+
+
+async function safePostToChannel(
+  channelId: string | null | undefined,
+  lines: string[],
+  context: string,
+): Promise<void> {
+  if (!channelId) return;
+  try {
+    await postChannelMessage(channelId, { content: lines.join('\n') });
+  } catch (err) {
+    console.error(`Failed to send ${context}`, err);
+  }
+}
+
+/**
+ * Posts the channel announcement for a lynched Hunter, then triggers their reactive shot.
+ * Both the first-lynch and second-lynch hunter paths share this sequence.
+ * `continuation` defaults to 'night' (advance to next night after shot).
+ * Pass `day_second_lynch:<dayNumber>` when the Hunter was first-lynch on a double-lynch day
+ * so the second lynch runs after the shot instead of advancing to night.
+ */
+async function announceAndTriggerLynchedHunterShot(
+  game: GameRow,
+  hunterId: string,
+  alivePlayers: GamePlayerState[],
+  lines: string[],
+  continuation = 'night',
+): Promise<void> {
+  await safePostToChannel(game.channel_id, lines, 'lynched hunter message');
+  await triggerHunterShot({ game, hunterId, continuation, alivePlayers });
+}
+
 /**
  * Called when a day vote is submitted or the day timeout fires.
  * Checks if a lynch verdict has been reached, then resolves the day:
@@ -787,27 +821,38 @@ export async function maybeResolveDay(
 ): Promise<void> {
   try {
     const game = await getGame(gameId);
-    if (!game || game.status !== 'day') {
+    if (!game || (game.status !== 'day' && game.status !== 'day_second_lynch')) {
       return;
     }
 
     const dayNumber = game.current_day || 1;
-    const isDoubleLynchDay =
+    // A double-lynch day's first round uses 'day'; the second round uses 'day_second_lynch'.
+    const isSecondLynch = game.status === 'day_second_lynch';
+    const isFirstLynchOfDouble =
+      !isSecondLynch &&
       game.troublemaker_double_lynch_day != null &&
       game.troublemaker_double_lynch_day === dayNumber;
 
+    const round = isSecondLynch ? 2 : 1;
+
     // --- 1. Check if a lynch verdict has been reached ---
     const players = await getPlayersForGame(gameId);
-    const votes = await getVotesForDay(gameId, dayNumber);
+    const votes = await getVotesForDay(gameId, dayNumber, round);
 
     const resolution = evaluateDayResolution(players, votes, { force });
     if (resolution.state === 'pending') {
       return;
     }
 
-    // Atomically claim resolution: advance day -> night.
-    // If another concurrent call already claimed it, bail out.
-    const claimed = await advancePhase(gameId, 'day');
+    // Atomically claim resolution.
+    // First lynch on a double-lynch day: transition to 'day_second_lynch' (no counter change).
+    // Everything else (normal day, second lynch, no-lynch): advance to 'night'.
+    let claimed: boolean;
+    if (isFirstLynchOfDouble && resolution.state !== 'no_lynch') {
+      claimed = await beginSecondLynchPhase(gameId);
+    } else {
+      claimed = (await advancePhase(gameId, game.status)) !== null;
+    }
     if (!claimed) return;
 
     // Disable stale vote DMs so players can't vote after the phase ends.
@@ -817,16 +862,11 @@ export async function maybeResolveDay(
 
     // --- 2. No-lynch result ---
     if (resolution.state === 'no_lynch') {
-      if (game.channel_id) {
-        try {
-          await postChannelMessage(game.channel_id, {
-            content: [buildNoLynchLine(dayNumber), buildNightFallsLine()].join('\n'),
-          });
-        } catch (err) {
-          console.error('Failed to send no-lynch day resolution message', err);
-        }
-      }
-
+      await safePostToChannel(
+        game.channel_id,
+        [buildNoLynchLine(dayNumber), buildNightFallsLine()],
+        'no-lynch day resolution message',
+      );
       await dmNightAndSchedule(gameId);
       return;
     }
@@ -844,14 +884,8 @@ export async function maybeResolveDay(
     // Immediate Tanner win on lynch: the game ends with the Tanner as the
     // sole winner; town and wolves both lose.
     if (isTannerLynchWin(lynched, updatedPlayers)) {
-      if (game.channel_id) {
-        const lines = [lynchResultLine(lynched), ...tannerLynchLines()];
-        try {
-          await postChannelMessage(game.channel_id, { content: lines.join('\n') });
-        } catch (err) {
-          console.error('Failed to send Tanner win message', err);
-        }
-      }
+      const lines = [lynchResultLine(lynched), ...tannerLynchLines()];
+      await safePostToChannel(game.channel_id, lines, 'Tanner win message');
       await endGame(gameId);
       return;
     }
@@ -862,182 +896,57 @@ export async function maybeResolveDay(
       ? updatedPlayers.find((p) => p.user_id === daySorrowVictimId) ?? null
       : null;
 
-    let secondLynch: GamePlayerState | null = null;
-    let extraSorrowVictim: GamePlayerState | null = null;
-    let extraSorrowPartnerId: string | null = null;
-
-    if (isDoubleLynchDay) {
-      const secondLynchId = chooseLynchVictim(updatedPlayers, votes);
-      if (secondLynchId) {
-        const second = updatedPlayers.find(
-          (p) => p.user_id === secondLynchId && p.is_alive,
-        );
-        if (second) {
-          await markPlayerDead(gameId, secondLynchId);
-          const afterSecond = await getPlayersForGame(gameId);
-
-          const {
-            sorrowVictimId: extraSorrowId,
-            partnerId: extraPartnerId,
-          } = await applyLoverSorrowDeaths(gameId, afterSecond);
-          if (extraSorrowId) {
-            extraSorrowVictim =
-              afterSecond.find((p) => p.user_id === extraSorrowId) ?? null;
-            extraSorrowPartnerId = extraPartnerId ?? null;
-          }
-
-          if (second.role === 'wolf_cub') {
-            await notifyWolfCubPackDeath(gameId, secondLynchId, afterSecond);
-          }
-
-          if (second.role === 'hunter') {
-            const aliveAfterSecond = afterSecond.filter((p) => p.is_alive);
-            if (game.channel_id) {
-              const lines: string[] = [lynchResultLine(lynched)];
-
-              if (daySorrowVictim) {
-                lines.push(
-                  loverSorrowDeathLine(
-                    daySorrowVictim.user_id,
-                    daySorrowPartnerId ?? undefined,
-                  ) +
-                    ` They were ${deathSummary(
-                      daySorrowVictim.alignment,
-                      daySorrowVictim.role,
-                    )}.`,
-                );
-              }
-
-              lines.push(lynchResultLine(second));
-
-              if (extraSorrowVictim) {
-                lines.push(
-                  loverSorrowDeathLine(
-                    extraSorrowVictim.user_id,
-                    extraSorrowPartnerId ?? undefined,
-                  ) +
-                    ` They were ${deathSummary(
-                      extraSorrowVictim.alignment,
-                      extraSorrowVictim.role,
-                    )}.`,
-                );
-              }
-
-              // For a second-lynch Hunter, narrate their fall and pending shot
-              // immediately after the lynch block so it doesn't get lost below other text.
-              lines.push(hunterTriggerLine());
-              lines.push(hunterResolveLine());
-
-              try {
-                await postChannelMessage(game.channel_id, {
-                  content: lines.join('\n'),
-                });
-              } catch (err) {
-                console.error('Failed to send double-lynch hunter message', err);
-              }
-            }
-
-            await triggerHunterShot({
-              game,
-              hunterId: secondLynchId,
-              continuation: 'night',
-              alivePlayers: aliveAfterSecond,
-            });
-            return;
-          }
-
-          secondLynch = second;
-        }
-      }
-    }
-
-    // If the Wolf Cub was lynched, DM surviving pack members and flag extra kill.
     if (lynched.role === 'wolf_cub') {
       await notifyWolfCubPackDeath(gameId, lynchId, updatedPlayers);
     }
 
-    // --- 4. Hunter reactive shot (if the hunter was lynched) ---
+    // --- 4. Hunter reactive shot ---
     if (lynched.role === 'hunter') {
-      const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
-      if (game.channel_id) {
-        const lines = [hunterTriggerLine(), hunterResolveLine(), lynchResultLine(lynched)];
-        try {
-          await postChannelMessage(game.channel_id, { content: lines.join('\n') });
-        } catch (err) {
-          console.error('Failed to send lynch message', err);
-        }
-      }
-      await triggerHunterShot({ game, hunterId: lynchId, continuation: 'night', alivePlayers });
+      const lines: string[] = [lynchResultLine(lynched)];
+      if (daySorrowVictim) lines.push(formatSorrowDeathLine(daySorrowVictim, daySorrowPartnerId));
+      lines.push(hunterTriggerLine(), hunterResolveLine());
+      // On the first lynch of a double-lynch day, the second vote must still happen after the shot.
+      const continuation = isFirstLynchOfDouble ? `day_second_lynch:${dayNumber}` : 'night';
+      await announceAndTriggerLynchedHunterShot(
+        game, lynchId, updatedPlayers.filter((p) => p.is_alive), lines, continuation,
+      );
       return;
     }
 
-    // Before checking win conditions, allow a Traitor to awaken as a wolf
-    // if all existing wolves have just died.
+    // --- 5. Traitor awakening + win condition check ---
     await maybeConvertTraitorToWerewolf(gameId);
     const playersAfterTraitor = await getPlayersForGame(gameId);
-
-    // --- 5. Win condition check and day resolution announcement ---
     const win = evaluateWinCondition(playersAfterTraitor);
 
-    if (game.channel_id) {
-      const lines: string[] = [lynchResultLine(lynched)];
-
-      if (daySorrowVictim) {
-        lines.push(
-          loverSorrowDeathLine(
-            daySorrowVictim.user_id,
-            daySorrowPartnerId ?? undefined,
-          ) +
-            ` They were ${deathSummary(
-              daySorrowVictim.alignment,
-              daySorrowVictim.role,
-            )}.`,
-        );
-      }
-
-      if (secondLynch) {
-        lines.push(lynchResultLine(secondLynch));
-      }
-
-      if (extraSorrowVictim) {
-        lines.push(
-          loverSorrowDeathLine(
-            extraSorrowVictim.user_id,
-            extraSorrowPartnerId ?? undefined,
-          ) +
-            ` They were ${deathSummary(
-              extraSorrowVictim.alignment,
-              extraSorrowVictim.role,
-            )}.`,
-        );
-      }
-
-      if (win) {
-        const winLines = await buildWinLinesWithLovers(gameId, playersAfterTraitor, win);
-        lines.push(...winLines);
-        lines.push(...finalRolesLines(playersAfterTraitor));
-      } else {
-        lines.push(buildNightFallsLine());
-      }
-
-      try {
-        await postChannelMessage(game.channel_id, { content: lines.join('\n') });
-      } catch (err) {
-        console.error('Failed to send day resolution message', err);
-      }
+    const lines: string[] = [lynchResultLine(lynched)];
+    if (daySorrowVictim) lines.push(formatSorrowDeathLine(daySorrowVictim, daySorrowPartnerId));
+    if (win) {
+      const winLines = await buildWinLinesWithLovers(gameId, playersAfterTraitor, win);
+      lines.push(...winLines, ...finalRolesLines(playersAfterTraitor));
+    } else if (!isFirstLynchOfDouble) {
+      lines.push(buildNightFallsLine());
     }
+    await safePostToChannel(game.channel_id, lines, 'day resolution message');
 
     if (win) {
       await endGame(gameId);
       return;
     }
 
-    // --- 6. Advance to night ---
+    if (isFirstLynchOfDouble) {
+      // --- 6a. Open second vote ---
+      scheduleDayVoting(gameId, dayNumber, true);
+      scheduleDayTimeout(gameId, dayNumber, true);
+      return;
+    }
+
+    // --- 6b. Advance to night ---
     await dmNightAndSchedule(gameId);
   } catch (err) {
     console.error('Error resolving day phase', err);
   }
 }
+
 
 /**
  * Resolves a hunter's reactive shot after they are eliminated.
@@ -1085,27 +994,14 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
         lines.push(hunterPassLine(hunterId));
       }
       if (hunterSorrowVictim) {
-        lines.push(
-          loverSorrowDeathLine(
-            hunterSorrowVictim.user_id,
-            hunterSorrowPartnerId ?? undefined,
-          ) +
-            ` They were ${deathSummary(
-              hunterSorrowVictim.alignment,
-              hunterSorrowVictim.role,
-            )}.`,
-        );
+        lines.push(formatSorrowDeathLine(hunterSorrowVictim, hunterSorrowPartnerId));
       }
       if (win) {
         const winLines = await buildWinLinesWithLovers(gameId, playersAfterTraitor, win);
         lines.push(...winLines);
         lines.push(...finalRolesLines(playersAfterTraitor));
       }
-      try {
-        await postChannelMessage(game.channel_id, { content: lines.join('\n') });
-      } catch (err) {
-        console.error('Failed to send hunter shot message', err);
-      }
+      await safePostToChannel(game.channel_id, lines, 'hunter shot message');
     }
 
     if (win) {
@@ -1113,9 +1009,13 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       return;
     }
 
-    // Continue the game: if the hunter was killed during day, start the next night;
-    // if during night, start the next day.
-    if (shot.continuation.startsWith('day:')) {
+    // Continue the game based on where the Hunter fell.
+    if (shot.continuation.startsWith('day_second_lynch:')) {
+      // First-lynch Hunter on a double-lynch day: open second vote.
+      const dayNumber = parseInt(shot.continuation.split(':')[1]!, 10);
+      scheduleDayVoting(gameId, dayNumber, true);
+      scheduleDayTimeout(gameId, dayNumber, true);
+    } else if (shot.continuation.startsWith('day:')) {
       const upcomingDay = parseInt(shot.continuation.split(':')[1]!, 10);
       scheduleDayVoting(gameId, upcomingDay);
       scheduleDayTimeout(gameId, upcomingDay);

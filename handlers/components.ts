@@ -528,7 +528,7 @@ export async function handleDayVote(req: Request, res: Response, componentId: st
     return res.status(400).json({ error: 'game not found for day vote' });
   }
 
-  if (game.status !== 'day') {
+  if (game.status !== 'day' && game.status !== 'day_second_lynch') {
     return res.send({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: { content: 'You can only vote during the day.' },
@@ -563,8 +563,9 @@ export async function handleDayVote(req: Request, res: Response, componentId: st
   }
 
   const dayNumber = game.current_day || 1;
+  const round = game.status === 'day_second_lynch' ? 2 : 1;
 
-  if (await hasDayVote(game.id, dayNumber, actorId)) {
+  if (await hasDayVote(game.id, dayNumber, round, actorId)) {
     return res.send({
       type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: { content: 'You have already voted today. Your vote cannot be changed.' },
@@ -591,6 +592,7 @@ export async function handleDayVote(req: Request, res: Response, componentId: st
   const inserted = await recordDayVote({
     gameId: game.id,
     day: dayNumber,
+    round,
     voterId: actorId,
     targetId: finalTargetId,
   });
@@ -604,6 +606,7 @@ export async function handleDayVote(req: Request, res: Response, componentId: st
     logEvent('day_vote_record', {
       gameId: game.id,
       day: dayNumber,
+      round,
       voterId: actorId,
       targetId: finalTargetId,
     });

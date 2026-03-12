@@ -24,6 +24,8 @@ ALTER TABLE games
 ALTER TABLE games
   ADD COLUMN IF NOT EXISTS troublemaker_double_lynch_day INTEGER;
 
+-- 'day_second_lynch' is a valid status value; no schema change needed (stored as TEXT).
+
 -- Ensure at most one non-ended game per (channel, guild) pair.
 CREATE UNIQUE INDEX IF NOT EXISTS active_games_per_channel
   ON games (channel_id, guild_id)
@@ -66,11 +68,18 @@ CREATE TABLE IF NOT EXISTS day_votes (
   id SERIAL PRIMARY KEY,
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   day INTEGER NOT NULL,
+  round INTEGER NOT NULL DEFAULT 1,
   voter_id TEXT NOT NULL,
   target_id TEXT NOT NULL,
   created_at BIGINT NOT NULL,
-  UNIQUE (game_id, day, voter_id)
+  UNIQUE (game_id, day, round, voter_id)
 );
+
+-- Migration: add round column and update unique constraint for existing tables.
+ALTER TABLE day_votes ADD COLUMN IF NOT EXISTS round INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE day_votes DROP CONSTRAINT IF EXISTS day_votes_game_id_day_voter_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS day_votes_game_day_round_voter
+  ON day_votes (game_id, day, round, voter_id);
 
 CREATE TABLE IF NOT EXISTS day_vote_prompts (
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
