@@ -4,14 +4,12 @@ export const DoctorRole: RoleDefinition = {
   name: 'doctor',
   alignment: 'town',
   description:
-    'Protects one player from the wolf kill each night. Can target themselves. ' +
-    'Protection only works if the target is at home — if the target is away (visiting someone else), ' +
-    'the doctor spends the night in their empty house and no save is recorded. ' +
+    'Protects one player from direct wolf or Serial Killer attacks each night. Can target themselves. ' +
+    'Protection only works if the target is effectively at home — if the target is away (for example, the Harlot out visiting), ' +
+    'the doctor cannot intercept the attack and no save is recorded. ' +
     'If the doctor protects a wolf pack member (werewolf, wolf_cub, alpha_wolf): ' +
-    '75% chance the wolf retaliates and kills the doctor. ' +
-    'If the wolf pack also targeted the doctor that same night, the wolf kill takes precedence ' +
-    'and the retaliation roll is skipped. ' +
-    'Doctor protection does not block chemist or arsonist kills.',
+    '75% chance the wolf retaliates and kills the doctor, unless the doctor was already killed by other means that night. ' +
+    'Doctor protection does not block Chemist duels or Arsonist fire.',
   unique: true,
   minPlayers: 5,
   nightAction: {
@@ -22,5 +20,8 @@ export const DoctorRole: RoleDefinition = {
   },
   buildRoleIntro: ({ assignment }: RoleIntroContext): string =>
     `Your role for this Werewolf game is: **${assignment.role}**.\n` +
-    'You are the DOCTOR. Each night you may protect one player from being eliminated.',
+    'You are the DOCTOR. Each night you choose one player to guard.\n' +
+    '- If the wolves or the Serial Killer successfully attack them while they are home, you save their life.\n' +
+    '- If you guard a wolf, there is a high chance they maul you in retaliation.\n' +
+    '- Your protection does **not** stop Chemist duels or Arsonist fire.',
 };

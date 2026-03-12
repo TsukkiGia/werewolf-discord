@@ -21,6 +21,7 @@ import {
   cultHunterNotCultistDmLine,
   cultHunterCultistKilledDmLine,
   cultHunterBackfireNotifyDmLine,
+  cultBackfireVictimDmLine,
 } from '../strings/narration.js';
 import { addDousedTarget, clearDousedTargets, getDousedTargets } from '../../db/arsonist.js';
 import { addCultMember, getCultMemberIds, getNewestCultMemberId } from '../../db/cult.js';
@@ -354,7 +355,7 @@ export async function processChemistActions(
       : `You visited <@${targetId}> to share your potions. They chose poorly and drank the poison. You survived.`;
 
     const targetContent = chemistDies
-      ? `The Chemist visited you for a late-night drink. You picked the safe potion — they took the poison and died.`
+      ? `The Chemist dragged you into a midnight tasting. At the last moment you grabbed the safe vial — they swallowed the poison and never saw the sunrise.`
       : `The Chemist visited you for a late-night drink. You chose the wrong potion and died from the poison.`;
 
     await safeDm(chemistId, chemistContent, 'chemist potion result');
@@ -518,15 +519,30 @@ export async function processCultistActions(
   players: GamePlayerState[],
   actions: NightActionRow[],
   killedIds: string[],
-): Promise<{ converted: boolean; backfiredVictimId: string | null }> {
-  const aliveCultists = players.filter((p) => p.is_alive && p.role === 'cultist');
-  if (aliveCultists.length === 0) return { converted: false, backfiredVictimId: null };
+): Promise<{ converted: boolean; backfiredVictimId: string | null; backfireTargetId: string | null }> {
+  // Only cultists who are still alive after earlier night resolutions
+  // (wolves, doctor retaliation, harlot, chemist, arsonist, etc.) may act.
+  const aliveCultists = players.filter(
+    (p) => p.is_alive && p.role === 'cultist' && !killedIds.includes(p.user_id),
+  );
+  if (aliveCultists.length === 0) {
+    return { converted: false, backfiredVictimId: null, backfireTargetId: null };
+  }
 
+  // Only count convert actions from cultists who are still alive.
+  const aliveCultistIds = new Set(aliveCultists.map((p) => p.user_id));
   const convertTargets = actions
-    .filter((a) => a.action_kind === 'convert' && a.target_id)
+    .filter(
+      (a) =>
+        a.action_kind === 'convert' &&
+        a.target_id &&
+        aliveCultistIds.has(a.actor_id),
+    )
     .map((a) => a.target_id as string);
 
-  if (convertTargets.length === 0) return { converted: false, backfiredVictimId: null };
+  if (convertTargets.length === 0) {
+    return { converted: false, backfiredVictimId: null, backfireTargetId: null };
+  }
 
   // Plurality vote — same mechanism as wolf kill voting.
   const counts = new Map<string, number>();
@@ -538,10 +554,14 @@ export async function processCultistActions(
     if (count > bestCount) { bestCount = count; chosenTarget = id; tie = false; }
     else if (count === bestCount) { tie = true; }
   }
-  if (tie || !chosenTarget) return { converted: false, backfiredVictimId: null };
+  if (tie || !chosenTarget) {
+    return { converted: false, backfiredVictimId: null, backfireTargetId: null };
+  }
 
   const target = players.find((p) => p.user_id === chosenTarget && p.is_alive);
-  if (!target) return { converted: false, backfiredVictimId: null };
+  if (!target) {
+    return { converted: false, backfiredVictimId: null, backfireTargetId: null };
+  }
 
   const cultistIds = aliveCultists.map((p) => p.user_id);
 
@@ -571,15 +591,25 @@ export async function processCultistActions(
         cultHunterBackfireNotifyDmLine(),
         'cult hunter backfire notify',
       );
-    } else if (isWolfAligned) {
-      await Promise.all(
-        cultistIds.map((id) =>
-          safeDm(id, cultWolfImmuneDmLine(), 'cult wolf immune'),
-        ),
+    } else {
+      // Wolf / Serial Killer backfire: tell the victim what happened and let the rest
+      // of the cult know their target was beyond their reach.
+      await safeDm(
+        victimId,
+        cultBackfireVictimDmLine(target.user_id),
+        'cult backfire victim',
       );
+      const otherCultists = cultistIds.filter((id) => id !== victimId);
+      if (otherCultists.length > 0) {
+        await Promise.all(
+          otherCultists.map((id) =>
+            safeDm(id, cultWolfImmuneDmLine(), 'cult wolf immune'),
+          ),
+        );
+      }
     }
 
-    return { converted: false, backfiredVictimId: victimId };
+    return { converted: false, backfiredVictimId: victimId, backfireTargetId: target.user_id };
   }
 
   // Successful conversion.
@@ -594,7 +624,7 @@ export async function processCultistActions(
     cultistIds.map((id) => safeDm(id, cultNewMemberNotifyDmLine(target.user_id), 'cult new member notify')),
   );
 
-  return { converted: true, backfiredVictimId: null };
+  return { converted: true, backfiredVictimId: null, backfireTargetId: null };
 }
 
 /**

@@ -98,6 +98,13 @@ CREATE TABLE IF NOT EXISTS arsonist_douses (
   PRIMARY KEY (game_id, target_id)
 );
 
+CREATE TABLE IF NOT EXISTS cult_members (
+  game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+  user_id TEXT NOT NULL,
+  joined_at BIGINT NOT NULL,
+  PRIMARY KEY (game_id, user_id)
+);
+
 CREATE TABLE IF NOT EXISTS game_lovers (
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
   lover_a_id TEXT NOT NULL,

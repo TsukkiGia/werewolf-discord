@@ -21,25 +21,50 @@ A Discord bot that runs full games of **Werewolf / Mafia** using slash commands,
 - Hunter reactive shot on elimination (night or lynch).
 - All narration posted to the game channel.
 
-**14 roles across 3 alignments**
+**Roles & alignments (22 roles)**  
+Town, Wolf, Neutral, and Cult teams, plus Lovers overlays.
 
-| Role | Alignment | Night action |
-|---|---|---|
-| Villager | Town | None |
-| Seer | Town | Inspect — learns the exact role of one player |
-| Fool | Town | Inspect — believes they are the Seer; each inspection returns a completely random role |
-| Doctor | Town | Protect — shields one player from night kill (can self-protect) |
-| Hunter | Town | None — shoots one player on elimination |
-| Cupid | Town | Link — at the start of the game, chooses two Lovers; if one dies, the other dies of sorrow; Lovers can share in each other’s win and can win together as the last two alive |
-| Mason | Town | None — masons know each other at game start |
-| Harlot | Town | Visit — dies if visiting a wolf or the wolf's target; escapes if wolves come for them |
-| Clumsy Guy | Town | None — 50% chance their day vote misfires to a random player |
-| Chemist | Town | Potion (odd nights only) — 50/50 who drinks the poison: them or the target |
-| Werewolf | Wolf | Kill |
-| Wolf Cub | Wolf | Kill — wolves get an extra kill the night after wolf cub dies |
-| Alpha Wolf | Wolf | Kill — immune to seer inspection revealing wolf |
-| Sorcerer | Wolf | Inspect — learns wolf/seer/other (limited vs seer); wins with wolves |
-| Arsonist | Neutral | Douse/Ignite — douses houses over time, then ignites for a multi-kill; wins as last survivor |
+**Town roles**
+
+| Role | Summary |
+|---|---|
+| Villager | No night action. Votes during the day; wins with town. |
+| Seer | Nightly inspect that reveals the target’s exact role (e.g. `werewolf`, `doctor`, `alpha_wolf`). |
+| Fool | Thinks they’re the Seer, but each inspection returns a completely random role, unrelated to the target. |
+| Doctor | Guards one player each night (can self‑protect). Blocks direct wolf and Serial Killer attacks; may die when protecting a wolf pack member. |
+| Hunter | No night action. When eliminated by *any* cause, gets a one‑off shot at another player before the phase ends. |
+| Cupid | Night 1 only: links two Lovers. If one dies, the other dies of sorrow; Lovers can share in each other’s win or win together as the last two alive. |
+| Mason | No night action. All masons learn each other at game start (confirmed town cell). |
+| Harlot | Visits one player each night. Wolves miss if they attack her empty house, but she dies if she visits a wolf pack member or the Serial Killer, or the player they chose to kill. |
+| Clumsy Guy | No night action. Each day vote has a 50% chance to be silently redirected to a random other alive player. |
+| Chemist | Acts on odd nights only. Starts a duel with a home target; a 50/50 roll decides whether the Chemist or the target drinks the poison and dies (doctor cannot save either). |
+| Thief | Night 1 only: steals the target’s role; the target becomes a Villager. If the stolen role is wolf‑aligned, the Thief joins the wolf team. |
+| TroubleMaker | Once per game, during the day, can trigger a **double‑lynch day** where two lynches are resolved instead of one. |
+| Cult Hunter | Each night, hunts one player; if they are a cultist, they die. If the cult ever targets the Hunter for conversion, their newest member dies instead. |
+| Traitor | Starts as town‑aligned with no night powers. If all current wolves die while the Traitor is alive, they flip to a werewolf and join the pack. |
+
+**Wolf‑team roles**
+
+| Role | Summary |
+|---|---|
+| Werewolf | Core wolf pack member. The pack collectively chooses one (or more, with bonuses) kill targets each night. |
+| Wolf Cub | Wolf pack member. When the Wolf Cub dies, the pack gains an extra kill on the following night. |
+| Alpha Wolf | Pack leader. Hunts like a normal wolf, but each night there is a 20% chance the primary target is **bitten** and turned into a werewolf instead of dying (if they are home, unprotected, and not already wolf‑aligned). |
+| Sorcerer | Wolf‑aligned seer. Each night learns whether a target is wolf‑aligned, the true Seer, or neither. Does not participate in the pack kill and does not trigger doctor retaliation. |
+
+**Neutral solos**
+
+| Role | Summary |
+|---|---|
+| Arsonist | Douses houses over multiple nights, then can ignite all doused houses at once. Fire kills occupants and visitors; doctor cannot prevent it. Wins only as the sole survivor (Lover edge‑cases aside). |
+| Serial Killer | Solo killer who can target anyone each night, ignoring home/away. Doctor can block them; if wolves attack the Serial Killer at home, there is a small chance they succeed, but usually one wolf dies instead. Wins only as sole survivor (Lover edge‑cases aside). |
+| Tanner | No night action. Wants to be lynched; if lynched during the day, the Tanner wins alone and everyone else loses. |
+
+**Cult**
+
+| Role | Summary |
+|---|---|
+| Cultist | Every other night (1, 3, 5, …) the cult votes on one player to convert; that player loses their old role and joins the cult. Wolves and the Serial Killer are immune; a Cultist who targets the Cult Hunter dies instead. The cult wins when all living players are cult‑aligned. |
 
 ---
 
@@ -72,17 +97,26 @@ werewolf-discord/
 │   ├── roles/                One file per role — each exports a RoleDefinition object
 │   │   ├── villager.ts
 │   │   ├── werewolf.ts       Wolves learn pack members at game start
-│   │   ├── seer.ts
-│   │   ├── doctor.ts
-│   │   ├── mason.ts          Masons learn each other at game start
-│   │   ├── sorcerer.ts
-│   │   ├── hunter.ts
 │   │   ├── wolfCub.ts
 │   │   ├── alphaWolf.ts
+│   │   ├── seer.ts
+│   │   ├── fool.ts
+│   │   ├── doctor.ts
+│   │   ├── hunter.ts
+│   │   ├── mason.ts          Masons learn each other at game start
+│   │   ├── cupid.ts
 │   │   ├── harlot.ts
 │   │   ├── clumsyGuy.ts
 │   │   ├── chemist.ts
-│   │   └── arsonist.ts
+│   │   ├── sorcerer.ts
+│   │   ├── arsonist.ts
+│   │   ├── serialKiller.ts
+│   │   ├── tanner.ts
+│   │   ├── traitor.ts
+│   │   ├── thief.ts
+│   │   ├── troublemaker.ts
+│   │   ├── cultist.ts
+│   │   └── cultHunter.ts
 │   │
 │   ├── balancing/
 │   │   ├── roleRegistry.ts   ROLE_REGISTRY — maps RoleName → RoleDefinition
@@ -93,10 +127,10 @@ werewolf-discord/
 │   ├── engine/
 │   │   ├── assignRoles.ts           Calls chooseSetup, shuffles players, writes DB
 │   │   ├── gameOrchestrator.ts      Night and day resolution; phase transitions; win check
-│   │   ├── nightActionProcessors.ts Role-specific night logic (seer, doctor, harlot, chemist, arsonist)
+│   │   ├── nightActionProcessors.ts Role-specific night logic (seer, doctor, harlot, chemist, arsonist, serial killer, cult, etc.)
 │   │   ├── nightResolution.ts       Determines when night is complete; picks wolf kill victim
 │   │   ├── dayResolution.ts         Plurality vote tally; tie = no-lynch
-│   │   ├── winConditions.ts         Town/wolf/arsonist win checks
+│   │   ├── winConditions.ts         Town / wolf / neutral solo / cult win checks
 │   │   ├── dmRoles.ts               DMs role intros, night action menus, day vote buttons
 │   │   ├── hunterShot.ts            Hunter reactive shot flow
 │   │   └── status.ts                Narration line builders for channel announcements
@@ -136,8 +170,8 @@ werewolf-discord/
 /ww_start   →  roles assigned, Night 1 DMs sent
                      │
               ┌──────▼──────┐
-              │    Night    │  wolves kill, seer inspects, doctor protects,
-              │             │  harlot visits, chemist duels, arsonist douses
+              │    Night    │  wolves kill, seer/sorcerer/fool inspect, doctor protects,
+              │             │  harlot visits, chemist duels, arsonist douses, Serial Killer and cult act
               └──────┬──────┘
                      │ all required actions submitted (or timeout)
               ┌──────▼──────┐
@@ -161,24 +195,33 @@ Phase transitions are driven by **pg-boss** jobs so they survive server restarts
 
 **Stage 1 — team sizes**
 - Wolf count: `Math.ceil(playerCount / 5)` (min 1) — roughly 1 wolf per 5 players.
-- Sorcerer added automatically when wolves ≥ 2 and 9+ players.
-- Arsonist included probabilistically: never below 8 players, up to 70% chance at 14+.
+- Wolf pack composition: for 1 wolf you always get a plain `werewolf`; for 2+ wolves, roles are drawn from `werewolf`, `wolf_cub`, and `alpha_wolf`.
+- Sorcerer: added automatically when there are 3+ wolves (and enough players), or with a 60% chance at exactly 2 wolves.
+- Neutral slot: in medium‑to‑large games (8+ players), there is a chance to add **exactly one** neutral/side faction, chosen from `arsonist`, `serial_killer`, `tanner`, `traitor`, or `cultist` (subject to their `minPlayers`).
+- If a `cultist` is chosen, a `cult_hunter` is also added on the town side so the cult always has a dedicated counter‑role.
 
 **Stage 2 — town power budget**
-- Budget = `wolves × 2.0 + 1.0 + (neutral ? 1.5 : 0)`.
-- Power roles are shuffled and drawn until the budget is spent:
+- A numeric “power budget” is derived from the opposition:
+  - Scales with wolf count.
+  - Adds extra budget when a neutral solo is present.
+  - Adds a small bonus if the pack includes an Alpha Wolf, and a larger bonus if a Cultist is in the setup (to fund the Cult Hunter and extra town power).
+- Town power roles are shuffled and drawn until the budget or player slots are exhausted:
 
-  | Role | Strength | Min players |
+  | Role | Strength | Notes |
   |---|---|---|
-  | Seer | 2.5 | 5 |
-  | Doctor | 1.5 | 5 |
-  | Masons (pair) | 2.0 | 8 |
-  | Chemist | 1.25 | 7 |
-  | Hunter | 1.0 | 6 |
-  | Harlot | 0.75 | 6 |
+  | Seer | 2.5 | Exact‑role inspector |
+  | Doctor | 1.5 | Night protection vs wolves/SK |
+  | Masons (pair) | 2.0 | Always added as a pair |
+  | Hunter | 1.0 | Reactive shot on death |
+  | Harlot | 0.75 | High‑risk visiting role |
+  | Chemist | 1.25 | Odd‑night duel killer |
+  | Cupid | 0.75 | Lovers side‑win condition |
+  | Thief | 1.25 | Role‑stealing swing piece |
+  | TroubleMaker | 0.75 | Once‑per‑game double‑lynch day |
 
-- Clumsy Guy added with 40% probability after the budget is spent (chaos element, min 6 players).
-- Remaining slots filled with plain Villagers.
+- `clumsy_guy` is added as a chaos role with 40% probability after the budget is spent, if there is room and the player count is high enough.
+- `fool` is added for free (does not spend from the budget) when a real `seer` is present and there’s room for both.
+- Remaining slots are filled with plain Villagers.
 - Up to 5 retries on validation failure; on total failure the game ends with a channel error message.
 
 **To add a new role:**
@@ -203,6 +246,8 @@ Phase transitions are driven by **pg-boss** jobs so they survive server restarts
 | `day_vote_prompts` | DM message IDs for day vote buttons |
 | `hunter_shots` | Pending/resolved hunter shot with continuation context (`night` or `day:N`) |
 | `arsonist_douses` | Persistent set of doused player IDs per game |
+| `cult_members` | Tracks everyone who has ever joined the cult in a game (with join order) |
+| `game_lovers` | Stores the Lover pair chosen by Cupid for a game |
 
 A unique partial index on `(channel_id, guild_id) WHERE status <> 'ended'` enforces one active game per channel.
 
@@ -214,10 +259,12 @@ A unique partial index on `(channel_id, guild_id) WHERE status <> 'ended'` enfor
 
 **Doctor protecting a wolf.** 75% chance the doctor dies (retaliation). Uses `WOLF_PACK_ROLES` — sorcerer does not trigger retaliation.
 
-**Away players.** `buildAwayPlayerIds()` determines which players are out of their house each night: any `visit`, `kill`, `protect`, or `potion` action with a target marks the **actor** as away from their own home. This is shared across:
-- **Wolf kills (body-based):** wolves can only kill a victim who is both unprotected **and at home**. If their chosen target is away, the kill is wasted and both sides get DMs.
-- **Doctor + Chemist (body-based):** doctor protection and Chemist duels require the target to be at home. If the target is away, the action fizzles (no save / no duel) and the actor gets a DM that the target was out for the night.
-- **Harlot + Arsonist (house-based):** these act on *houses*. Harlot visiting and Arsonist dousing/igniting resolve based on which house is targeted; home/away only changes who is physically present (e.g. visitors vs occupants, special narration for coming home to a burned house).
+**Home vs away.** Only the Harlot is ever treated as “away from home”: when she uses her night **visit**, she leaves her own house and is marked as away for that night. Everyone else is always considered home for targeting rules. Key interactions:
+- **Wolf kills:** if the wolves choose a target who is away (a visiting Harlot), the kill misses entirely. Otherwise, wolves kill the chosen victim plus certain visitors to that house (Harlot, Chemist, Cultist, Cult Hunter, etc.), unless blocked by the doctor.
+- **Serial Killer:** SK attacks ignore home/away — they can kill targets who are home or out. Doctor protection can still block an SK attack.
+- **Doctor:** always stays home while protecting and can guard any target; their protection applies only to direct wolf/SK attacks, not Chemist duels or Arsonist fire.
+- **Harlot:** dies when visiting a wolf‑pack member or the Serial Killer, and also when visiting the wolves’ or SK’s chosen victim. Wolves miss her if they attack her own empty house.
+- **Arsonist & Chemist:** Arsonist douses and ignites *houses* (killing occupants and visitors when ignited). Chemist duels require the target to be home; if the target is out, the duel is cancelled and the Chemist is notified.
 
 **All narration in one place.** `game/strings/narration.ts` is the single source of truth. The orchestrator contains zero inline strings.
 

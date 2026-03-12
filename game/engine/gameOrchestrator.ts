@@ -82,6 +82,7 @@ import {
   cultHunterKilledLine,
   skFoughtBackDmLine,
   skCounterKillWolfDmLine,
+  cultBackfireMonsterLine,
 } from '../strings/narration.js';
 
 type NightDeathCause =
@@ -516,7 +517,18 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         break;
       }
       case 'cult_backfire': {
-        lines.push(cultBackfiredLine(death.playerId));
+        const victim = playersById.get(death.playerId);
+        const target =
+          death.relatedPlayerId != null
+            ? playersById.get(death.relatedPlayerId)
+            : undefined;
+        if (victim) {
+          if (target?.role === 'cult_hunter') {
+            lines.push(cultBackfiredLine(victim.user_id));
+          } else {
+            lines.push(cultBackfireMonsterLine(victim.user_id));
+          }
+        }
         break;
       }
       case 'cult_hunter_kill': {
@@ -945,15 +957,31 @@ async function resolveNightActionsAndCollectDeaths(params: {
   }
 
   // --- Cultist actions (odd nights only) ---
-  const { converted: cultConverted, backfiredVictimId } = await processCultistActions(
+  const {
+    converted: cultConverted,
+    backfiredVictimId,
+    backfireTargetId,
+  } = await processCultistActions(
     gameId,
     players,
     actions,
     killedIds,
   );
-  if (backfiredVictimId && !killedIds.includes(backfiredVictimId)) {
-    killedIds.push(backfiredVictimId);
-    nightDeaths.push({ playerId: backfiredVictimId, cause: 'cult_backfire' });
+  if (backfiredVictimId) {
+    if (!killedIds.includes(backfiredVictimId)) {
+      killedIds.push(backfiredVictimId);
+    }
+    const cultBackfireDeath: NightDeathInfo = backfireTargetId
+      ? {
+          playerId: backfiredVictimId,
+          cause: 'cult_backfire',
+          relatedPlayerId: backfireTargetId,
+        }
+      : {
+          playerId: backfiredVictimId,
+          cause: 'cult_backfire',
+        };
+    nightDeaths.push(cultBackfireDeath);
   }
 
   // --- Cult Hunter actions ---

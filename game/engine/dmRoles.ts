@@ -171,7 +171,6 @@ async function dmNightPromptsCore(params: {
         if (def.name === 'arsonist' && dousedTargets.includes(id)) continue;
         // Cultist cannot target wolf-aligned players (immune) or existing cultists.
         if (def.name === 'cultist') {
-          if (alignmentById.get(id) === 'wolf') continue;
           if (cultMemberIds.includes(id)) continue;
         }
         const label = await getDisplayName(id, game.guild_id);

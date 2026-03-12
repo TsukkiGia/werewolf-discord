@@ -468,6 +468,15 @@ export function cultBackfiredLine(victimId: string): string {
   return pickRandom(variants);
 }
 
+export function cultBackfireMonsterLine(victimId: string): string {
+  const variants = [
+    `The cult reached for something monstrous in the dark. By dawn, only <@${victimId}>'s body was left behind.`,
+    `Whispers say a cultist tried to claim a creature beyond their control. <@${victimId}> paid for the attempt with their life.`,
+    `The cult's ritual latched onto a nightmare instead of a soul. <@${victimId}> was torn apart by what they tried to convert.`,
+  ];
+  return pickRandom(variants);
+}
+
 export function cultHunterKilledLine(victimId: string): string {
   const variants = [
     `<@${victimId}> was hunted down in the night — a cultist, eliminated.`,
@@ -523,6 +532,14 @@ export function cultHunterBackfireNotifyDmLine(): string {
     'The cult came for you last night, but their newest member paid the price instead. Stay vigilant.',
     'You were targeted by the cult — but their own recruit died in your place.',
     "The cult's conversion attempt backfired. Their newest member is dead. You are safe.",
+  ]);
+}
+
+export function cultBackfireVictimDmLine(targetId: string): string {
+  return pickRandom([
+    `You reached out to drag <@${targetId}> into the cult — but they were far from helpless. They turned on you, and you never made it back.`,
+    `Your whispered rites failed. <@${targetId}> broke free and tore you apart instead of joining your cause.`,
+    `The moment you tried to claim <@${targetId}> for the cult, everything went wrong. Teeth, steel, and panic — and then darkness.`,
   ]);
 }
 
