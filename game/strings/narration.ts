@@ -89,6 +89,15 @@ export function doctorSavedTargetLine(): string {
   return pickRandom(variants);
 }
 
+export function hunterTriggerLine(): string {
+  const variants = [
+    'As steel and claws close in, the Hunter staggers — but something fierce lights up behind their eyes.',
+    'The Hunter falls under the night’s assault, yet even as they hit the ground their gaze hardens with one last purpose.',
+    'Wounds bloom across the Hunter’s body, but their grip tightens on their weapon. This isn’t over yet.',
+  ];
+  return pickRandom(variants);
+}
+
 export function hunterResolveLine(): string {
   const variants = [
     "The Hunter's eyes flash with resolve...",

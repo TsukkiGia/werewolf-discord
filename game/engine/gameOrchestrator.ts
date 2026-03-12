@@ -49,6 +49,7 @@ import {
   doctorSavedRumorLine,
   finalRolesLines,
   hunterPassLine,
+  hunterTriggerLine,
   hunterResolveLine,
   hunterShotLine,
   lynchResultLine,
@@ -186,7 +187,9 @@ async function buildWinLinesWithLovers(
 
   // Case 1: Lovers are the last two alive — they win together regardless of team.
   if (alive.length === 2) {
-    return [...baseLines, loversWinAloneLine(loverAId, loverBId)];
+    // In this special case, only the Lovers win; base faction win lines are
+    // suppressed so we don't announce a simultaneous wolf/town/neut/cult win.
+    return [loversWinAloneLine(loverAId, loverBId)];
   }
 
   // Case 2: Both Lovers alive and at least one is on the winning side.
@@ -360,14 +363,20 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     if (killedHunter) {
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
+        // Omit the Hunter's own generic death line from the night summary;
+        // their fall is narrated via the trigger/resolve lines instead.
+        const filteredNightDeaths = nightDeaths.filter(
+          (d) => d.playerId !== killedHunter.user_id,
+        );
         const lines: string[] = buildNightSummaryLines(
-          nightDeaths,
+          filteredNightDeaths,
           updatedPlayers,
           doctorSavedSomeone,
           cultConverted,
         );
+        // Call out the Hunter's final stand before listing the full night summary.
+        lines.splice(1, 0, hunterTriggerLine(), hunterResolveLine());
         if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
-        lines.push(hunterResolveLine());
         try {
           await postChannelMessage(game.channel_id, { content: lines.join('\n') });
         } catch (err) {
@@ -1191,6 +1200,9 @@ export async function maybeResolveDay(
                 );
               }
 
+              // For a second-lynch Hunter, narrate their fall and pending shot
+              // immediately after the lynch block so it doesn't get lost below other text.
+              lines.push(hunterTriggerLine());
               lines.push(hunterResolveLine());
 
               try {
@@ -1243,7 +1255,7 @@ export async function maybeResolveDay(
     if (lynched.role === 'hunter') {
       const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
-        const lines = [lynchResultLine(lynched), hunterResolveLine()];
+        const lines = [hunterTriggerLine(), hunterResolveLine(), lynchResultLine(lynched)];
         try {
           await postChannelMessage(game.channel_id, { content: lines.join('\n') });
         } catch (err) {
