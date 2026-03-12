@@ -1,9 +1,9 @@
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { markPlayerDead, setPlayerRoleAndAlignment } from '../../db/players.js';
-import { WOLF_PACK_ROLES, type RoleName, type Alignment, type NightActionKind } from '../types.js';
+import { WOLF_PACK_ROLES, type RoleName, type Alignment, type NightActionKind, type NightDeathInfo } from '../types.js';
 import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
-import type { HarlotVisit } from './nightResolution.js';
+import { chooseKillVictim, type HarlotVisit } from './nightResolution.js';
 import { openDmChannel, postChannelMessage } from '../../utils.js';
 import {
   harlotVisitedWolfLine,
@@ -11,8 +11,27 @@ import {
   harlotSafeVisitLine,
   harlotVisitNotificationLine,
   doctorSavedTargetLine,
+  doctorWolfProtectionKilledDmLine,
+  doctorWolfProtectionSurvivedDmLine,
+  doctorProtectionResultDmLine,
+  chemistAwayTargetDmLine,
+  chemistDiedFromDuelDmLine,
+  chemistWonDuelDmLine,
+  chemistTargetSurvivedDmLine,
+  chemistTargetDiedFromDuelDmLine,
+  arsonistDousedTargetDmLine,
   serialKillerKillDmLine,
   serialKillerVictimDmLine,
+  skBlockedByDoctorDmLine,
+  skFoughtBackDmLine,
+  skCounterKillWolfDmLine,
+  wolfTargetNotHomeLine,
+  wolfMissedYouAwayLine,
+  wolfBlockedByDoctorLine,
+  wolfKillDmLine,
+  wolfStabbedBySKDmLine,
+  alphaWolfTurnedYouLine,
+  alphaWolfTurnedPackLine,
   thiefNewRoleDmLine,
   thiefTargetDmLine,
   cultConvertedDmLine,
@@ -95,7 +114,11 @@ export async function processSeerActions(
         }
 
         case 'seer': {
-          const revealedRole = target.role;
+          // Traitor appears as a plain villager to the Seer until they turn.
+          const revealedRole =
+            target.role === 'traitor' && target.alignment !== 'wolf'
+              ? 'villager'
+              : target.role;
           content = `Your vision reveals that ${userTag} is **${revealedRole}**.`;
           break;
         }
@@ -179,8 +202,8 @@ export async function processDoctorActions(
           doctorDeathInfo = { doctorId, wolfTargetId: targetId };
         }
         const content = doctorDies
-          ? `You tried to protect <@${targetId}>, but they were a wolf in disguise. They turned on you — you did not survive.`
-          : `You tried to protect <@${targetId}>, but they were a wolf in disguise. They lunged for you, but you escaped with your life.`;
+          ? doctorWolfProtectionKilledDmLine(targetId)
+          : doctorWolfProtectionSurvivedDmLine(targetId);
         await safeDm(doctorId, content, 'doctor wolf-protection result');
         return;
       }
@@ -191,13 +214,7 @@ export async function processDoctorActions(
         killTargets.includes(targetId) && !killedIds.includes(targetId);
       if (saved) anySaved = true;
 
-      const content = isSelf
-        ? saved
-          ? 'You guarded yourself tonight. The wolves came for you, but your defenses held.'
-          : 'You guarded yourself tonight. The wolves never came.'
-        : saved
-          ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
-          : `You watched over <@${targetId}>. The night passed quietly.`;
+      const content = doctorProtectionResultDmLine(isSelf, saved, targetId);
 
       await safeDm(doctorId, content, 'doctor protection result');
     }),
@@ -334,11 +351,7 @@ export async function processChemistActions(
 
     // If the target is out for the night, the duel never happens.
     if (awayPlayerIds.has(targetId)) {
-      await safeDm(
-        chemistId,
-        `You went looking for <@${targetId}> to share your potions, but they were out for the night. Your vials stayed corked.`,
-        'chemist away-target result',
-      );
+      await safeDm(chemistId, chemistAwayTargetDmLine(targetId), 'chemist away-target result');
       continue;
     }
 
@@ -350,13 +363,8 @@ export async function processChemistActions(
     duels.push({ chemistId, targetId, victimId });
 
     // DM both players about the outcome.
-    const chemistContent = chemistDies
-      ? `You visited <@${targetId}> to share your potions. They grabbed the safe one. You drank the poison and died.`
-      : `You visited <@${targetId}> to share your potions. They chose poorly and drank the poison. You survived.`;
-
-    const targetContent = chemistDies
-      ? `The Chemist dragged you into a midnight tasting. At the last moment you grabbed the safe vial — they swallowed the poison and never saw the sunrise.`
-      : `The Chemist visited you for a late-night drink. You chose the wrong potion and died from the poison.`;
+    const chemistContent = chemistDies ? chemistDiedFromDuelDmLine(targetId) : chemistWonDuelDmLine(targetId);
+    const targetContent = chemistDies ? chemistTargetSurvivedDmLine() : chemistTargetDiedFromDuelDmLine();
 
     await safeDm(chemistId, chemistContent, 'chemist potion result');
     await safeDm(targetId, targetContent, 'chemist target potion result');
@@ -462,11 +470,7 @@ export async function processArsonistActions(
   // Otherwise this night is a douse.
   if (action.target_id) {
     await addDousedTarget(gameId, action.target_id);
-    await safeDm(
-      arsonist.user_id,
-      `You quietly drenched <@${action.target_id}>’s house in kerosene. It will stay primed until you choose to ignite.`,
-      'arsonist douse result',
-    );
+    await safeDm(arsonist.user_id, arsonistDousedTargetDmLine(action.target_id), "arsonist douse result");
   }
 
   return { killedIds: [], burnedVictims: [] };
@@ -582,7 +586,6 @@ export async function processCultistActions(
 
     if (!killedIds.includes(victimId)) {
       await markPlayerDead(gameId, victimId);
-      killedIds.push(victimId);
     }
 
     if (isCultHunter) {
@@ -663,6 +666,228 @@ export async function processCultHunterActions(
   return { killedCultistId: target.user_id };
 }
 
+export interface WolfKillActionResult {
+  wolfChosenVictims: string[];
+  killedIds: string[];
+  nightDeaths: NightDeathInfo[];
+  biteConvertedId: string | null;
+}
+
+/**
+ * Process the wolf pack's kill action for one night.
+ *
+ * Handles:
+ * - Wolf extra kills (Wolf Cub bonus)
+ * - Away target miss (target was visiting elsewhere)
+ * - Doctor protection block
+ * - Serial Killer at home: 20% wolves win, 80% random wolf dies
+ * - Alpha Wolf bite: 20% chance to convert primary target instead of killing
+ * - Normal kill: victim + any non-Harlot visitors at the same house
+ */
+export async function processWolfKillActions(params: {
+  gameId: string;
+  players: GamePlayerState[];
+  actions: NightActionRow[];
+  killTargets: string[];
+  protectTargets: string[];
+  wolfExtraKills: number;
+}): Promise<WolfKillActionResult> {
+  const { gameId, players, actions, killTargets, protectTargets, wolfExtraKills } = params;
+
+  const killedIds: string[] = [];
+  const nightDeaths: NightDeathInfo[] = [];
+  let biteConvertedId: string | null = null;
+
+  const maxWolfVictims = 1 + wolfExtraKills;
+  const wolfChosenVictims: string[] = [];
+  let remainingKillTargets = killTargets.slice();
+  while (wolfChosenVictims.length < maxWolfVictims) {
+    const v = chooseKillVictim(remainingKillTargets);
+    if (!v) break;
+    wolfChosenVictims.push(v);
+    remainingKillTargets = remainingKillTargets.filter((id) => id !== v);
+  }
+
+  const protectedSet = new Set(protectTargets);
+  const awayPlayerIds = buildAwayPlayerIds(actions);
+  const harlotIds = new Set(players.filter((p) => p.role === 'harlot').map((p) => p.user_id));
+  const alphaWolfAlive = players.some((p) => p.role === 'alpha_wolf' && p.is_alive);
+  const playersById = new Map(players.map((p) => [p.user_id, p]));
+
+  for (const targetId of wolfChosenVictims) {
+    if (awayPlayerIds.has(targetId)) {
+      // Target wasn't home — kill is wasted.
+      const killActors = actions.filter((a) => a.action_kind === 'kill' && a.target_id === targetId);
+      await Promise.all(
+        killActors.map(async (a) => {
+          try {
+            const dmChannelId = await openDmChannel(a.actor_id);
+            await postChannelMessage(dmChannelId, { content: wolfTargetNotHomeLine(targetId) });
+          } catch (err) {
+            console.error('Failed to DM wolf not-home result', err);
+          }
+        }),
+      );
+      try {
+        const dmChannelId = await openDmChannel(targetId);
+        await postChannelMessage(dmChannelId, { content: wolfMissedYouAwayLine() });
+      } catch (err) {
+        console.error('Failed to DM away-target wolf miss result', err);
+      }
+      continue;
+    }
+
+    if (protectedSet.has(targetId)) {
+      // Doctor blocked this kill.
+      const killActors = actions.filter((a) => a.action_kind === 'kill' && a.target_id === targetId);
+      await Promise.all(
+        killActors.map(async (a) => {
+          try {
+            const dmChannelId = await openDmChannel(a.actor_id);
+            await postChannelMessage(dmChannelId, { content: wolfBlockedByDoctorLine(targetId) });
+          } catch (err) {
+            console.error('Failed to DM wolf doctor-block result', err);
+          }
+        }),
+      );
+      try {
+        const dmChannelId = await openDmChannel(targetId);
+        await postChannelMessage(dmChannelId, { content: doctorSavedTargetLine() });
+      } catch (err) {
+        console.error('Failed to DM doctor-saved target result', err);
+      }
+      continue;
+    }
+
+    const targetPlayer = playersById.get(targetId);
+
+    // Wolves vs Serial Killer: 20% wolves kill SK, 80% a random wolf dies instead.
+    if (targetPlayer?.role === 'serial_killer') {
+      const packMates = players.filter(
+        (p) => p.is_alive && !killedIds.includes(p.user_id) && WOLF_PACK_ROLES.has(p.role as RoleName),
+      );
+      if (packMates.length > 0) {
+        if (Math.random() < 0.2) {
+          // Wolves kill the Serial Killer.
+          if (!killedIds.includes(targetId)) {
+            killedIds.push(targetId);
+            await markPlayerDead(gameId, targetId);
+            nightDeaths.push({ playerId: targetId, cause: 'wolf_kill' });
+            try {
+              const dmChannelId = await openDmChannel(targetId);
+              await postChannelMessage(dmChannelId, { content: wolfKillDmLine() });
+            } catch (err) {
+              console.error('Failed to DM wolf kill victim (serial killer)', gameId, targetId, err);
+            }
+          }
+        } else {
+          // Serial Killer fends off the attack — a random wolf dies instead.
+          const wolfToKill = packMates[Math.floor(Math.random() * packMates.length)]!;
+          if (!killedIds.includes(wolfToKill.user_id)) {
+            killedIds.push(wolfToKill.user_id);
+            await markPlayerDead(gameId, wolfToKill.user_id);
+            nightDeaths.push({ playerId: wolfToKill.user_id, cause: 'serial_killer_wolf_counter' });
+            try {
+              const dmChannelId = await openDmChannel(wolfToKill.user_id);
+              await postChannelMessage(dmChannelId, { content: wolfStabbedBySKDmLine() });
+            } catch (err) {
+              console.error('Failed to DM wolf stabbed by serial killer', gameId, wolfToKill.user_id, err);
+            }
+            try {
+              const dmChannelId = await openDmChannel(targetId);
+              await postChannelMessage(dmChannelId, { content: skFoughtBackDmLine() });
+            } catch (err) {
+              console.error('Failed to DM SK counter-kill survival', gameId, targetId, err);
+            }
+            const survivingPack = packMates.filter((p) => p.user_id !== wolfToKill.user_id);
+            await Promise.all(
+              survivingPack.map(async (wolf) => {
+                try {
+                  const dmChannelId = await openDmChannel(wolf.user_id);
+                  await postChannelMessage(dmChannelId, { content: skCounterKillWolfDmLine(wolfToKill.user_id) });
+                } catch (err) {
+                  console.error('Failed to DM pack about SK counter-kill', gameId, wolf.user_id, err);
+                }
+              }),
+            );
+          }
+        }
+        continue;
+      }
+      // No pack mates alive — fall through to normal wolf kill logic.
+    }
+
+    // Alpha Wolf bite: 20% chance to convert the primary target instead of killing.
+    // Only applies to the first chosen victim and only to non-wolf-aligned players.
+    if (
+      targetId === wolfChosenVictims[0] &&
+      alphaWolfAlive &&
+      biteConvertedId === null &&
+      playersById.get(targetId)?.alignment !== 'wolf' &&
+      Math.random() < 0.2
+    ) {
+      await setPlayerRoleAndAlignment(gameId, targetId, 'werewolf', 'wolf');
+      biteConvertedId = targetId;
+
+      const packMates = players.filter(
+        (p) => p.is_alive && WOLF_PACK_ROLES.has(p.role as RoleName) && p.user_id !== targetId,
+      );
+      const packMentions = packMates.length > 0
+        ? packMates.map((p) => `<@${p.user_id}>`).join(', ')
+        : 'none — you stand alone';
+
+      try {
+        const dmChannelId = await openDmChannel(targetId);
+        await postChannelMessage(dmChannelId, { content: alphaWolfTurnedYouLine(packMentions) });
+      } catch (err) {
+        console.error('Failed to DM newly turned wolf', gameId, targetId, err);
+      }
+      await Promise.all(
+        packMates.map(async (wolf) => {
+          try {
+            const dmChannelId = await openDmChannel(wolf.user_id);
+            await postChannelMessage(dmChannelId, { content: alphaWolfTurnedPackLine(targetId) });
+          } catch (err) {
+            console.error('Failed to DM pack about new wolf', gameId, wolf.user_id, err);
+          }
+        }),
+      );
+      continue;
+    }
+
+    // Successful wolf kill: victim plus any non-Harlot visitors at the same house.
+    const wolfVictims = new Set<string>([targetId]);
+    for (const a of actions) {
+      if (
+        (a.action_kind === 'visit' ||
+          a.action_kind === 'potion' ||
+          a.action_kind === 'convert' ||
+          a.action_kind === 'hunt') &&
+        a.target_id === targetId &&
+        !harlotIds.has(a.actor_id)
+      ) {
+        wolfVictims.add(a.actor_id);
+      }
+    }
+
+    for (const id of wolfVictims) {
+      if (!killedIds.includes(id)) {
+        killedIds.push(id);
+        await markPlayerDead(gameId, id);
+        nightDeaths.push({ playerId: id, cause: 'wolf_kill' });
+        try {
+          const dmChannelId = await openDmChannel(id);
+          await postChannelMessage(dmChannelId, { content: wolfKillDmLine() });
+        } catch (err) {
+          console.error('Failed to DM wolf kill victim', gameId, id, err);
+        }
+      }
+    }
+  }
+
+  return { wolfChosenVictims, killedIds, nightDeaths, biteConvertedId };
+}
+
 export async function processSerialKillerActions(
   gameId: string,
   players: GamePlayerState[],
@@ -718,30 +943,15 @@ export async function processSerialKillerActions(
   const isProtectedAtHome = protectedSet.has(target.user_id);
 
   if (isProtectedAtHome) {
-    await safeDm(
-      serialKiller.user_id,
-      'You struck from the shadows, but someone was already guarding your target. Your kill was stopped by a doctor.',
-      'serial killer blocked by doctor',
-    );
-    await safeDm(
-      target.user_id,
-      doctorSavedTargetLine(),
-      'doctor saved from serial killer',
-    );
+    await safeDm(serialKiller.user_id, skBlockedByDoctorDmLine(), 'serial killer blocked by doctor');
+    await safeDm(target.user_id, doctorSavedTargetLine(), 'doctor saved from serial killer');
     return { killedIds: killedBySerialKiller };
   }
 
-  await safeDm(
-    serialKiller.user_id,
-    serialKillerKillDmLine(target.user_id),
-    'serial killer kill',
-  );
-  await safeDm(
-    target.user_id,
-    serialKillerVictimDmLine(),
-    'serial killer victim',
-  );
+  await safeDm(serialKiller.user_id, serialKillerKillDmLine(target.user_id), 'serial killer kill');
+  await safeDm(target.user_id, serialKillerVictimDmLine(), 'serial killer victim');
 
+  await markPlayerDead(gameId, target.user_id);
   killedBySerialKiller.push(target.user_id);
 
   return { killedIds: killedBySerialKiller };

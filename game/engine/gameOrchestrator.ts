@@ -15,7 +15,7 @@ import {
 } from '../../db.js';
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
-import { WOLF_PACK_ROLES, type RoleName } from '../types.js';
+import { WOLF_PACK_ROLES, type RoleName, type NightDeathInfo } from '../types.js';
 import {
   processSeerActions,
   processDoctorActions,
@@ -26,10 +26,10 @@ import {
   processCultistActions,
   processCultHunterActions,
   processSerialKillerActions,
-  buildAwayPlayerIds,
+  processWolfKillActions,
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
-import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
+import { evaluateNightResolution } from './nightResolution.js';
 import { evaluateDayResolution, chooseLynchVictim } from './dayResolution.js';
 import { evaluateWinCondition, buildWinLines } from './winConditions.js';
 import type { WinResult } from './winConditions.js';
@@ -38,7 +38,7 @@ import {
   buildNightFallsLine,
   buildNoLynchLine,
 } from './status.js';
-import { dmNightActionsForAlivePlayers, disableDayVotePrompts } from './dmRoles.js';
+import { dmNightActionsForAlivePlayers, disableDayVotePrompts, dmTroublemakerDiscussPrompt } from './dmRoles.js';
 import { triggerHunterShot } from './hunterShot.js';
 import { scheduleDayVoting } from '../../jobs/dayVoting.js';
 import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
@@ -54,10 +54,7 @@ import {
   hunterShotLine,
   lynchResultLine,
   nightVictimLine,
-  wolfTargetNotHomeLine,
-  wolfMissedYouAwayLine,
-  wolfBlockedByDoctorLine,
-  doctorSavedTargetLine,
+  tannerLynchLines,
   doctorProtectingWolfDeathLine,
   harlotVisitWolfDeathLine,
   harlotVisitWolfVictimDeathLine,
@@ -69,9 +66,6 @@ import {
   serialKillerVictimDeathLine,
   wolfStabbedBySerialKillerLine,
   deathSummary,
-  wolfKillDmLine,
-  alphaWolfTurnedYouLine,
-  alphaWolfTurnedPackLine,
   alphaWolfBiteChannelLine,
   loversWinAloneLine,
   loversAlsoWinLine,
@@ -81,31 +75,8 @@ import {
   cultGainedMemberLine,
   cultBackfiredLine,
   cultHunterKilledLine,
-  skFoughtBackDmLine,
-  skCounterKillWolfDmLine,
   cultBackfireMonsterLine,
 } from '../strings/narration.js';
-
-type NightDeathCause =
-  | 'wolf_kill'
-  | 'doctor_protecting_wolf'
-  | 'harlot_visiting_wolf'
-  | 'harlot_visiting_wolf_victim'
-  | 'chemist_self'
-  | 'chemist_target'
-  | 'arsonist_fire_home'
-  | 'arsonist_fire_away'
-  | 'lover_sorrow'
-  | 'cult_backfire'
-  | 'cult_hunter_kill'
-  | 'serial_killer'
-  | 'serial_killer_wolf_counter';
-
-interface NightDeathInfo {
-  playerId: string;
-  cause: NightDeathCause;
-  relatedPlayerId?: string;
-}
 
 interface NightActionResolutionOutcome {
   updatedPlayers: GamePlayerState[];
@@ -329,39 +300,25 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       return victim?.role === 'wolf_cub';
     });
     if (wolfCubDeath) {
-      const cubId = wolfCubDeath.playerId;
-      const packMates = updatedPlayers.filter(
-        (p) =>
-          p.is_alive &&
-          WOLF_PACK_ROLES.has(p.role as RoleName) &&
-          p.user_id !== cubId,
-      );
-      await Promise.all(
-        packMates.map(async (wolf) => {
-          try {
-            const dmChannelId = await openDmChannel(wolf.user_id);
-            await postChannelMessage(dmChannelId, {
-              content: wolfCubDeathPackLine(cubId),
-            });
-          } catch (err) {
-            console.error('Failed to DM wolf pack about Wolf Cub death', gameId, wolf.user_id, err);
-          }
-        }),
-      );
-      await incrementWolfExtraKillsForNextNight(gameId);
+      await notifyWolfCubPackDeath(gameId, wolfCubDeath.playerId, updatedPlayers);
     }
 
     if (hasWolfExtraKill) {
       await clearWolfExtraKillsForNextNight(gameId);
     }
 
+    // If all current wolves are dead but a Traitor is alive, they awaken as
+    // a new werewolf before any win checks are evaluated.
+    await maybeConvertTraitorToWerewolf(gameId);
+    const postTraitorPlayers = await getPlayersForGame(gameId);
+
     // --- 8. Hunter reactive shot (if the hunter was killed tonight) ---
     const killedHunter = killedIds.length > 0
-      ? updatedPlayers.find((p) => killedIds.includes(p.user_id) && p.role === 'hunter')
+      ? postTraitorPlayers.find((p) => killedIds.includes(p.user_id) && p.role === 'hunter')
       : null;
 
     if (killedHunter) {
-      const alivePlayers = updatedPlayers.filter((p) => p.is_alive);
+      const alivePlayers = postTraitorPlayers.filter((p) => p.is_alive);
       if (game.channel_id) {
         // Omit the Hunter's own generic death line from the night summary;
         // their fall is narrated via the trigger/resolve lines instead.
@@ -370,7 +327,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
         );
         const lines: string[] = buildNightSummaryLines(
           filteredNightDeaths,
-          updatedPlayers,
+          postTraitorPlayers,
           doctorSavedSomeone,
           cultConverted,
         );
@@ -388,22 +345,22 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     }
 
     // --- 9. Dawn announcement ---
-    const win = evaluateWinCondition(updatedPlayers);
+    const win = evaluateWinCondition(postTraitorPlayers);
 
-    if (game.channel_id) {
-      const lines: string[] = buildNightSummaryLines(
-        nightDeaths,
-        updatedPlayers,
-        doctorSavedSomeone,
-        cultConverted,
-      );
+      if (game.channel_id) {
+        const lines: string[] = buildNightSummaryLines(
+          nightDeaths,
+          postTraitorPlayers,
+          doctorSavedSomeone,
+          cultConverted,
+        );
       if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
       if (thiefActed) lines.push(thiefStoleLine());
 
       if (win) {
-        const winLines = await buildWinLinesWithLovers(gameId, updatedPlayers, win);
+        const winLines = await buildWinLinesWithLovers(gameId, postTraitorPlayers, win);
         lines.push(...winLines);
-        lines.push(...finalRolesLines(updatedPlayers));
+        lines.push(...finalRolesLines(postTraitorPlayers));
       } else {
         lines.push(buildDayStartLine(upcomingDay));
       }
@@ -423,6 +380,11 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     // --- 10. Schedule day voting and timeout ---
     scheduleDayVoting(gameId, upcomingDay);
     scheduleDayTimeout(gameId, upcomingDay);
+    await dmTroublemakerDiscussPrompt({
+      game,
+      players: postTraitorPlayers,
+      dayNumber: upcomingDay,
+    });
   } catch (err) {
     console.error('Error resolving night phase', err);
   }
@@ -625,252 +587,19 @@ async function resolveNightActionsAndCollectDeaths(params: {
   } =
     params;
 
-  const harlotIds = new Set(
-    players.filter((p) => p.role === 'harlot').map((p) => p.user_id),
-  );
-
   const serialKillerVictimIds = actions
-    .filter(
-      (a) =>
-        a.action_kind === 'kill' &&
-        a.target_id &&
-        a.role === 'serial_killer',
-    )
+    .filter((a) => a.action_kind === 'kill' && a.target_id && a.role === 'serial_killer')
     .map((a) => a.target_id as string);
 
   // --- Wolf kill ---
-  // "Not home" mechanic: any player with a night action that targets another
-  // player (visit, kill, protect, potion) is away for the night.
-  // If a chosen victim is away, that kill is wasted.
-  const maxWolfVictims = 1 + wolfExtraKills;
-  const wolfChosenVictims: string[] = [];
-  let remainingKillTargets = killTargets.slice();
-  while (wolfChosenVictims.length < maxWolfVictims) {
-    const v = chooseKillVictim(remainingKillTargets);
-    if (!v) break;
-    wolfChosenVictims.push(v);
-    remainingKillTargets = remainingKillTargets.filter((id) => id !== v);
-  }
-  const victimId = wolfChosenVictims[0] ?? null;
-
-  const protectedSet = new Set(protectTargets);
-  const awayPlayerIds = buildAwayPlayerIds(actions);
-
-  const killedIds: string[] = [];
-  const nightDeaths: NightDeathInfo[] = [];
-  let biteConvertedId: string | null = null;
-
-  const alphaWolfAlive = players.some((p) => p.role === 'alpha_wolf' && p.is_alive);
-  const playersById = new Map(players.map((p) => [p.user_id, p]));
-
-  for (const targetId of wolfChosenVictims) {
-    if (awayPlayerIds.has(targetId)) {
-      // Notify wolves that their target wasn't home.
-      const killActors = actions.filter(
-        (a) => a.action_kind === 'kill' && a.target_id === targetId,
-      );
-      await Promise.all(
-        killActors.map(async (a) => {
-          try {
-            const dmChannelId = await openDmChannel(a.actor_id);
-            await postChannelMessage(dmChannelId, {
-              content: wolfTargetNotHomeLine(targetId),
-            });
-          } catch (err) {
-            console.error('Failed to DM wolf not-home result', err);
-          }
-        }),
-      );
-
-      // Let the intended victim know the wolves came while they were out.
-      try {
-        const dmChannelId = await openDmChannel(targetId);
-        await postChannelMessage(dmChannelId, { content: wolfMissedYouAwayLine() });
-      } catch (err) {
-        console.error('Failed to DM away-target wolf miss result', err);
-      }
-      continue;
-    }
-
-    if (protectedSet.has(targetId)) {
-      // Wolves chose a victim who was at home, but the doctor blocked the kill.
-      const killActors = actions.filter(
-        (a) => a.action_kind === 'kill' && a.target_id === targetId,
-      );
-      await Promise.all(
-        killActors.map(async (a) => {
-          try {
-            const dmChannelId = await openDmChannel(a.actor_id);
-            await postChannelMessage(dmChannelId, {
-              content: wolfBlockedByDoctorLine(targetId),
-            });
-          } catch (err) {
-            console.error('Failed to DM wolf doctor-block result', err);
-          }
-        }),
-      );
-
-      // Let the saved victim know they were attacked but survived thanks to the doctor.
-      try {
-        const dmChannelId = await openDmChannel(targetId);
-        await postChannelMessage(dmChannelId, {
-          content: doctorSavedTargetLine(),
-        });
-      } catch (err) {
-        console.error('Failed to DM doctor-saved target result', err);
-      }
-      continue;
-    }
-
-    const targetPlayer = playersById.get(targetId);
-    if (targetPlayer?.role === 'serial_killer') {
-      const packMates = players.filter(
-        (p) =>
-          p.is_alive &&
-          !killedIds.includes(p.user_id) &&
-          WOLF_PACK_ROLES.has(p.role as RoleName),
-      );
-
-      if (packMates.length > 0) {
-        const roll = Math.random();
-        if (roll < 0.2) {
-          // Wolves manage to kill the Serial Killer.
-          if (!killedIds.includes(targetId)) {
-            killedIds.push(targetId);
-            await markPlayerDead(gameId, targetId);
-            nightDeaths.push({ playerId: targetId, cause: 'wolf_kill' });
-            try {
-              const dmChannelId = await openDmChannel(targetId);
-              await postChannelMessage(dmChannelId, {
-                content: wolfKillDmLine(),
-              });
-            } catch (err) {
-              console.error('Failed to DM wolf kill victim (serial killer)', gameId, targetId, err);
-            }
-          }
-        } else {
-          // Serial Killer fends off the attack and kills a random wolf instead.
-          const wolfToKill = packMates[Math.floor(Math.random() * packMates.length)]!;
-          if (!killedIds.includes(wolfToKill.user_id)) {
-            killedIds.push(wolfToKill.user_id);
-            await markPlayerDead(gameId, wolfToKill.user_id);
-            nightDeaths.push({
-              playerId: wolfToKill.user_id,
-              cause: 'serial_killer_wolf_counter',
-            });
-            // DM the dying wolf.
-            try {
-              const dmChannelId = await openDmChannel(wolfToKill.user_id);
-              await postChannelMessage(dmChannelId, {
-                content:
-                  'You lunged for your prey, but steel flashed in the dark. A knife found you before your fangs could.',
-              });
-            } catch (err) {
-              console.error('Failed to DM wolf stabbed by serial killer', gameId, wolfToKill.user_id, err);
-            }
-            // DM the SK that they survived.
-            try {
-              const dmChannelId = await openDmChannel(targetId);
-              await postChannelMessage(dmChannelId, { content: skFoughtBackDmLine() });
-            } catch (err) {
-              console.error('Failed to DM SK counter-kill survival', gameId, targetId, err);
-            }
-            // DM surviving pack members.
-            const survivingPack = packMates.filter((p) => p.user_id !== wolfToKill.user_id);
-            await Promise.all(
-              survivingPack.map(async (wolf) => {
-                try {
-                  const dmChannelId = await openDmChannel(wolf.user_id);
-                  await postChannelMessage(dmChannelId, {
-                    content: skCounterKillWolfDmLine(wolfToKill.user_id),
-                  });
-                } catch (err) {
-                  console.error('Failed to DM pack about SK counter-kill', gameId, wolf.user_id, err);
-                }
-              }),
-            );
-          }
-        }
-        continue;
-      }
-      // If somehow no pack mates are alive, fall through to normal wolf logic.
-    }
-
-    // Alpha Wolf bite: 20% chance to convert the primary target instead of killing.
-    // Only applies to the first chosen victim, and only to non-wolf-aligned players.
-    if (
-      targetId === wolfChosenVictims[0] &&
-      alphaWolfAlive &&
-      biteConvertedId === null &&
-      playersById.get(targetId)?.alignment !== 'wolf' &&
-      Math.random() < 0.2
-    ) {
-      await setPlayerRoleAndAlignment(gameId, targetId, 'werewolf', 'wolf');
-      biteConvertedId = targetId;
-
-      // Tell the turned player who their new packmates are.
-      const packMates = players.filter(
-        (p) => p.is_alive && WOLF_PACK_ROLES.has(p.role as RoleName) && p.user_id !== targetId,
-      );
-      const packMentions = packMates.length > 0
-        ? packMates.map((p) => `<@${p.user_id}>`).join(', ')
-        : 'none — you stand alone';
-
-      try {
-        const dmChannelId = await openDmChannel(targetId);
-        await postChannelMessage(dmChannelId, { content: alphaWolfTurnedYouLine(packMentions) });
-      } catch (err) {
-        console.error('Failed to DM newly turned wolf', gameId, targetId, err);
-      }
-
-      // Tell the existing pack a new wolf has joined.
-      await Promise.all(
-        packMates.map(async (wolf) => {
-          try {
-            const dmChannelId = await openDmChannel(wolf.user_id);
-            await postChannelMessage(dmChannelId, { content: alphaWolfTurnedPackLine(targetId) });
-          } catch (err) {
-            console.error('Failed to DM pack about new wolf', gameId, wolf.user_id, err);
-          }
-        }),
-      );
-
-      continue;
-    }
-
-    // Successful wolf kill for this chosen victim (and their visitors).
-    const wolfVictims = new Set<string>();
-    wolfVictims.add(targetId);
-
-    for (const a of actions) {
-      if (
-        (a.action_kind === 'visit' ||
-          a.action_kind === 'potion' ||
-          a.action_kind === 'convert' ||
-          a.action_kind === 'hunt') &&
-        a.target_id === targetId &&
-        !harlotIds.has(a.actor_id)
-      ) {
-        wolfVictims.add(a.actor_id);
-      }
-    }
-
-    for (const id of wolfVictims) {
-      if (!killedIds.includes(id)) {
-        killedIds.push(id);
-        await markPlayerDead(gameId, id);
-        nightDeaths.push({ playerId: id, cause: 'wolf_kill' });
-        try {
-          const dmChannelId = await openDmChannel(id);
-          await postChannelMessage(dmChannelId, {
-            content: wolfKillDmLine(),
-          });
-        } catch (err) {
-          console.error('Failed to DM wolf kill victim', gameId, id, err);
-        }
-      }
-    }
-  }
+  const { wolfChosenVictims, killedIds, nightDeaths, biteConvertedId } = await processWolfKillActions({
+    gameId,
+    players,
+    actions,
+    killTargets,
+    protectTargets,
+    wolfExtraKills,
+  });
 
   // --- Doctor actions ---
   // Pass only the resolved victim (not raw wolf votes) so feedback is accurate
@@ -1001,6 +730,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
   }
 
   // --- Serial Killer actions ---
+  const protectedSet = new Set(protectTargets);
   const serialKillerResult = await processSerialKillerActions(
     gameId,
     players,
@@ -1012,7 +742,6 @@ async function resolveNightActionsAndCollectDeaths(params: {
   for (const id of serialKillerResult.killedIds) {
     if (!killedIds.includes(id)) {
       killedIds.push(id);
-      await markPlayerDead(gameId, id);
       nightDeaths.push({ playerId: id, cause: 'serial_killer' });
     }
   }
@@ -1021,6 +750,27 @@ async function resolveNightActionsAndCollectDeaths(params: {
   const updatedPlayers = await getPlayersForGame(gameId);
 
   return { updatedPlayers, killedIds, nightDeaths, doctorSavedSomeone, biteConvertedId, cultConverted };
+}
+
+async function notifyWolfCubPackDeath(
+  gameId: string,
+  cubId: string,
+  players: GamePlayerState[],
+): Promise<void> {
+  const packMates = players.filter(
+    (p) => p.is_alive && WOLF_PACK_ROLES.has(p.role as RoleName) && p.user_id !== cubId,
+  );
+  await Promise.all(
+    packMates.map(async (wolf) => {
+      try {
+        const dmChannelId = await openDmChannel(wolf.user_id);
+        await postChannelMessage(dmChannelId, { content: wolfCubDeathPackLine(cubId) });
+      } catch (err) {
+        console.error('Failed to DM wolf pack about Wolf Cub death', gameId, wolf.user_id, err);
+      }
+    }),
+  );
+  await incrementWolfExtraKillsForNextNight(gameId);
 }
 
 /**
@@ -1095,11 +845,7 @@ export async function maybeResolveDay(
     // sole winner; town and wolves both lose.
     if (isTannerLynchWin(lynched, updatedPlayers)) {
       if (game.channel_id) {
-        const lines = [
-          lynchResultLine(lynched),
-          'In a cruel twist, the village has hanged the Tanner — a miserable soul who wanted nothing more than to die.',
-          'The Tanner wins alone. Everyone else loses.',
-        ];
+        const lines = [lynchResultLine(lynched), ...tannerLynchLines()];
         try {
           await postChannelMessage(game.channel_id, { content: lines.join('\n') });
         } catch (err) {
@@ -1141,30 +887,7 @@ export async function maybeResolveDay(
           }
 
           if (second.role === 'wolf_cub') {
-            const packMates = afterSecond.filter(
-              (p) =>
-                p.is_alive &&
-                WOLF_PACK_ROLES.has(p.role as RoleName) &&
-                p.user_id !== secondLynchId,
-            );
-            await Promise.all(
-              packMates.map(async (wolf) => {
-                try {
-                  const dmChannelId = await openDmChannel(wolf.user_id);
-                  await postChannelMessage(dmChannelId, {
-                    content: wolfCubDeathPackLine(secondLynchId),
-                  });
-                } catch (err) {
-                  console.error(
-                    'Failed to DM wolf pack about Wolf Cub lynch (second lynch)',
-                    gameId,
-                    wolf.user_id,
-                    err,
-                  );
-                }
-              }),
-            );
-            await incrementWolfExtraKillsForNextNight(gameId);
+            await notifyWolfCubPackDeath(gameId, secondLynchId, afterSecond);
           }
 
           if (second.role === 'hunter') {
@@ -1230,25 +953,7 @@ export async function maybeResolveDay(
 
     // If the Wolf Cub was lynched, DM surviving pack members and flag extra kill.
     if (lynched.role === 'wolf_cub') {
-      const packMates = updatedPlayers.filter(
-        (p) =>
-          p.is_alive &&
-          WOLF_PACK_ROLES.has(p.role as RoleName) &&
-          p.user_id !== lynchId,
-      );
-      await Promise.all(
-        packMates.map(async (wolf) => {
-          try {
-            const dmChannelId = await openDmChannel(wolf.user_id);
-            await postChannelMessage(dmChannelId, {
-              content: wolfCubDeathPackLine(lynchId),
-            });
-          } catch (err) {
-            console.error('Failed to DM wolf pack about Wolf Cub lynch', gameId, wolf.user_id, err);
-          }
-        }),
-      );
-      await incrementWolfExtraKillsForNextNight(gameId);
+      await notifyWolfCubPackDeath(gameId, lynchId, updatedPlayers);
     }
 
     // --- 4. Hunter reactive shot (if the hunter was lynched) ---
@@ -1266,8 +971,13 @@ export async function maybeResolveDay(
       return;
     }
 
+    // Before checking win conditions, allow a Traitor to awaken as a wolf
+    // if all existing wolves have just died.
+    await maybeConvertTraitorToWerewolf(gameId);
+    const playersAfterTraitor = await getPlayersForGame(gameId);
+
     // --- 5. Win condition check and day resolution announcement ---
-    const win = evaluateWinCondition(updatedPlayers);
+    const win = evaluateWinCondition(playersAfterTraitor);
 
     if (game.channel_id) {
       const lines: string[] = [lynchResultLine(lynched)];
@@ -1303,9 +1013,9 @@ export async function maybeResolveDay(
       }
 
       if (win) {
-        const winLines = await buildWinLinesWithLovers(gameId, updatedPlayers, win);
+        const winLines = await buildWinLinesWithLovers(gameId, playersAfterTraitor, win);
         lines.push(...winLines);
-        lines.push(...finalRolesLines(updatedPlayers));
+        lines.push(...finalRolesLines(playersAfterTraitor));
       } else {
         lines.push(buildNightFallsLine());
       }
@@ -1356,13 +1066,18 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       ? updatedPlayers.find((p) => p.user_id === hunterSorrowVictimId) ?? null
       : null;
 
-    const win = evaluateWinCondition(updatedPlayers);
+    // After the shot and any Lover sorrow, allow a Traitor to awaken as a wolf
+    // if the shot killed the last existing wolf.
+    await maybeConvertTraitorToWerewolf(gameId);
+    const playersAfterTraitor = await getPlayersForGame(gameId);
 
-    if (game?.channel_id) {
+    const win = evaluateWinCondition(playersAfterTraitor);
+
+      if (game?.channel_id) {
       const lines: string[] = [];
-      if (targetId) {
-        const target = updatedPlayers.find((p) => p.user_id === targetId);
-        const hunter = updatedPlayers.find((p) => p.user_id === hunterId);
+        if (targetId) {
+          const target = updatedPlayers.find((p) => p.user_id === targetId);
+          const hunter = updatedPlayers.find((p) => p.user_id === hunterId);
         if (target && hunter) {
           lines.push(hunterShotLine(hunter, target));
         }
@@ -1382,9 +1097,9 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
         );
       }
       if (win) {
-        const winLines = await buildWinLinesWithLovers(gameId, updatedPlayers, win);
+        const winLines = await buildWinLinesWithLovers(gameId, playersAfterTraitor, win);
         lines.push(...winLines);
-        lines.push(...finalRolesLines(updatedPlayers));
+        lines.push(...finalRolesLines(playersAfterTraitor));
       }
       try {
         await postChannelMessage(game.channel_id, { content: lines.join('\n') });

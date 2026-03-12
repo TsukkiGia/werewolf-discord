@@ -105,3 +105,24 @@ export interface RoleDefinition {
    */
   buildRoleIntro: (ctx: RoleIntroContext) => string;
 }
+
+export type NightDeathCause =
+  | 'wolf_kill'
+  | 'doctor_protecting_wolf'
+  | 'harlot_visiting_wolf'
+  | 'harlot_visiting_wolf_victim'
+  | 'chemist_self'
+  | 'chemist_target'
+  | 'arsonist_fire_home'
+  | 'arsonist_fire_away'
+  | 'lover_sorrow'
+  | 'cult_backfire'
+  | 'cult_hunter_kill'
+  | 'serial_killer'
+  | 'serial_killer_wolf_counter';
+
+export interface NightDeathInfo {
+  playerId: string;
+  cause: NightDeathCause;
+  relatedPlayerId?: string;
+}

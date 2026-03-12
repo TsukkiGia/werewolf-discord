@@ -22,7 +22,7 @@ export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
 
   const shuffledPlayers = shuffle(playerIds);
   // const setup = chooseSetup(playerIds.length);
-  const setup = makeTestSetup(playerIds.length, 'cultist');
+  const setup = makeTestSetup(playerIds.length, 'troublemaker');
 
   const assignments: AssignedRole[] = [];
 

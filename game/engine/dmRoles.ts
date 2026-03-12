@@ -342,6 +342,57 @@ export async function dmNightActionsForAlivePlayers(params: {
   });
 }
 
+export async function dmTroublemakerDiscussPrompt(params: {
+  game: GameRow;
+  players: GamePlayerState[];
+  dayNumber: number;
+}): Promise<void> {
+  const { game, players, dayNumber } = params;
+
+  if (game.troublemaker_double_lynch_day != null) {
+    return;
+  }
+
+  const troublemakers = players.filter(
+    (p) => p.is_alive && p.role === 'troublemaker',
+  );
+  if (troublemakers.length === 0) return;
+
+  for (const tm of troublemakers) {
+    try {
+      const dmChannelId = await openDmChannel(tm.user_id);
+      await postChannelMessage(dmChannelId, {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: [
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content:
+              `Day ${dayNumber} has begun. During the discussion period, you may cause trouble so the village resolves **two lynches** today instead of one.`,
+          },
+          {
+            type: MessageComponentTypes.ACTION_ROW,
+            components: [
+              {
+                type: MessageComponentTypes.BUTTON,
+                custom_id: `troublemaker_double_lynch:${game.id}:${dayNumber}`,
+                style: 2,
+                label: 'Make trouble (double lynch today)',
+              },
+            ],
+          },
+        ],
+      });
+    } catch (err) {
+      console.error(
+        'Failed to DM TroubleMaker discuss prompt',
+        game.id,
+        tm.user_id,
+        err,
+      );
+    }
+  }
+}
+
 export async function dmDayVotePrompts(params: {
   game: GameRow;
   players: GamePlayerState[];
@@ -393,24 +444,6 @@ export async function dmDayVotePrompts(params: {
           ],
         },
       ];
-
-      const isTroublemaker =
-        isRoleName(player.role) && ROLE_REGISTRY[player.role].name === 'troublemaker';
-      const abilityUnused = game.troublemaker_double_lynch_day == null;
-
-      if (isTroublemaker && abilityUnused) {
-        components.push({
-          type: MessageComponentTypes.ACTION_ROW,
-          components: [
-            {
-              type: MessageComponentTypes.BUTTON,
-              custom_id: `troublemaker_double_lynch:${game.id}:${game.current_day || 1}`,
-              style: 2,
-              label: 'Make trouble (double lynch today)',
-            },
-          ],
-        });
-      }
 
       const msgRes = await postChannelMessage(dmChannelId, {
         flags: InteractionResponseFlags.IS_COMPONENTS_V2,

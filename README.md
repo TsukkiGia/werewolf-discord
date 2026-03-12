@@ -266,6 +266,70 @@ A unique partial index on `(channel_id, guild_id) WHERE status <> 'ended'` enfor
 - **Harlot:** dies when visiting a wolf‑pack member or the Serial Killer, and also when visiting the wolves’ or SK’s chosen victim. Wolves miss her if they attack her own empty house.
 - **Arsonist & Chemist:** Arsonist douses and ignites *houses* (killing occupants and visitors when ignited). Chemist duels require the target to be home; if the target is out, the duel is cancelled and the Chemist is notified.
 
+**Wolves vs Serial Killer.**
+- Wolves hunting the Serial Killer at home: roll once per night:
+  - 20% — the pack manages to kill the Serial Killer (normal wolf kill).
+  - 80% — the Serial Killer survives and one random wolf‑pack member dies instead, with a special “mysterious stab wounds” line in the dawn summary.
+- If, in the same night, the Serial Killer also chose a wolf‑pack member as their own target, that duel is fully resolved in the wolf phase above; the SK’s own kill is skipped so you don’t get double deaths or duplicate narration.
+- Wolves still miss the Serial Killer entirely if the SK is “away” killing someone else that night (wolves targeted SK’s house, but SK was out).
+
+**Serial Killer targeting & wins.**
+- SK can kill **any** role (wolves, town, neutrals, cult) and ignores home/away; only Doctor protection at home can stop an SK attack.
+- SK deaths from Doctor‑immune mechanics (Chemist duel, Arsonist fire) are unaffected by doctor.
+- Win rules:
+  - If exactly **2 players** are alive and one is the Serial Killer, the SK wins immediately (with a “slaughtered everyone” style line), unless Lovers override the endgame.
+  - If the SK is the **only** player alive, they also win.
+
+**Arsonist fire.**
+- Douse nights: Arsonist adds a player’s **house** to a persistent doused set and gets a DM; doctor can’t prevent dousing.
+- Ignite night: if at least one house is doused, all doused houses burn:
+  - Each doused player dies whether they were home or away (home vs away only changes narration flavor).
+  - Any visitors whose night action targeted that house (doctor, Harlot, Chemist, Thief, Cultist, Cult Hunter, etc.) also die.
+- Doctor protection never prevents arsonist kills.
+
+**Chemist duel.**
+- Acts on odd‑numbered nights only.
+- If the chosen target is away, the duel is cancelled and the Chemist is told the house was empty.
+- If the target is home, a 50/50 roll decides whether the Chemist or the target dies; both get dramatic DMs.
+- Doctor cannot save either side from a Chemist duel.
+
+**Cult vs Cult Hunter vs monsters.**
+- Every other night the cult votes on a single conversion target:
+  - **Normal target** (town / neutral non‑immune): loses their old role and becomes a cultist; cult DMs announce the new member.
+  - **Cult Hunter**: conversion backfires; the newest cult member dies instead, and the Hunter gets a special “you were targeted” DM.
+  - **Wolf‑aligned or Serial Killer**: conversion fails and kills the converting cultist; the dying cultist and surviving cultists get distinct DMs explaining that the target is beyond their reach.
+- Cult wins when **all living players** are cult‑aligned; Cult Hunter is town‑aligned and wins with town.
+
+**Lovers & sorrow deaths.**
+- Cupid links two Lovers on Night 1. They know each other’s identities but not roles.
+- If exactly one Lover dies at any time (night kill, lynch, hunter shot, etc.), the survivor immediately dies of sorrow in the same phase; this sorrow death is noted explicitly in the channel with alignment/role reveal.
+- Win overlays:
+  - If the last two players alive are the Lovers, they win **alone** regardless of teams; base faction win text is suppressed.
+  - If both Lovers survive and at least one of them is on the winning side (wolves, town, arsonist, or cult), an extra line announces that the Lovers also win together.
+
+**Hunter reactive shot.**
+- Whenever the Hunter dies (night, lynch, or second lynch on a TroubleMaker day), the channel gets a short “Hunter was attacked but their eyes light up…” then a “Hunter resolves their final shot…” line.
+- Later, a separate message announces the shot result:
+  - If they shoot: “Hunter took X down with them. They were Y.”
+  - If they pass: a “Hunter lowered their weapon” line.
+- The Hunter’s own generic death line is suppressed in the dawn summary so their death is only narrated through these special lines.
+
+**Traitor.**
+- Starts as a town‑aligned `traitor` with no night action.
+- While unturned, the Seer sees the Traitor as a **villager** (role result), not “traitor”.
+- As soon as all existing wolves are dead and the Traitor is still alive:
+  - They automatically flip to `werewolf`/`wolf` alignment before any win checks.
+  - From that night on they join the wolf team for win counting and Seer inspections.
+
+**TroubleMaker double lynch.**
+- TroubleMaker is town‑aligned and has no night action.
+- Once per game, during a **day’s discussion period** (before voting opens), they receive a DM button to “Make trouble”.
+- Clicking it marks that day as a double‑lynch day:
+  - The normal lynch resolves using the usual plurality rules.
+  - Immediately afterward, a **second** lynch is attempted using the same votes and rules.
+  - Special roles (Wolf Cub, Hunter, Lovers) are handled correctly for both lynches.
+- TroubleMaker still gets their own normal lynch vote like everyone else.
+
 **All narration in one place.** `game/strings/narration.ts` is the single source of truth. The orchestrator contains zero inline strings.
 
 **Atomic phase transitions.** `advancePhase()` uses a SQL `WHERE status = X` guard so concurrent timeout and manual resolution calls safely abort rather than double-transition.

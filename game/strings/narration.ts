@@ -587,3 +587,111 @@ export function finalRolesLines(players: GamePlayerState[]): string[] {
       : ['No players were recorded for this game.'];
   return ['Final roles:', ...roleLines];
 }
+
+// --- Tanner ---
+
+export function tannerLynchLines(): string[] {
+  return [
+    'In a cruel twist, the village has hanged the Tanner — a miserable soul who wanted nothing more than to die.',
+    'The Tanner wins alone. Everyone else loses.',
+  ];
+}
+
+// --- Doctor DMs ---
+
+export function doctorWolfProtectionKilledDmLine(targetId: string): string {
+  return pickRandom([
+    `You tried to protect <@${targetId}>, but they were a wolf in disguise. They turned on you — you did not survive.`,
+    `Your healing hands reached for <@${targetId}>, but you found a wolf instead. They tore into you, and you paid with your life.`,
+    `<@${targetId}> was no innocent to protect — they were a wolf. You learned that too late.`,
+  ]);
+}
+
+export function doctorWolfProtectionSurvivedDmLine(targetId: string): string {
+  return pickRandom([
+    `You tried to protect <@${targetId}>, but they were a wolf in disguise. They lunged for you, but you escaped with your life.`,
+    `<@${targetId}> was a wolf, not a patient. They snapped at you — but you barely managed to pull away.`,
+    `You reached to protect <@${targetId}> and found fangs instead. You survived, but only just.`,
+  ]);
+}
+
+export function doctorProtectionResultDmLine(isSelf: boolean, saved: boolean, targetId: string): string {
+  if (isSelf) {
+    return saved
+      ? 'You guarded yourself tonight. The wolves came for you, but your defenses held.'
+      : 'You guarded yourself tonight. The wolves never came.';
+  }
+  return saved
+    ? `You watched over <@${targetId}>. The wolves struck, but your protection held.`
+    : `You watched over <@${targetId}>. The night passed quietly.`;
+}
+
+// --- Chemist DMs ---
+
+export function chemistAwayTargetDmLine(targetId: string): string {
+  return pickRandom([
+    `You went looking for <@${targetId}> to share your potions, but they were out for the night. Your vials stayed corked.`,
+    `<@${targetId}> wasn't home. You couldn't run your experiment tonight.`,
+    `You waited at <@${targetId}>'s door with your vials ready, but they never came back. The duel is off.`,
+  ]);
+}
+
+export function chemistDiedFromDuelDmLine(targetId: string): string {
+  return pickRandom([
+    `You visited <@${targetId}> to share your potions. They grabbed the safe one. You drank the poison and died.`,
+    `You brought two vials to <@${targetId}>'s door. They chose wisely. You didn't.`,
+    `<@${targetId}> saw through your trick — or simply got lucky. The wrong potion was yours.`,
+  ]);
+}
+
+export function chemistWonDuelDmLine(targetId: string): string {
+  return pickRandom([
+    `You visited <@${targetId}> to share your potions. They chose poorly and drank the poison. You survived.`,
+    `<@${targetId}> made the wrong choice. The poison was theirs, and you walk away.`,
+    `Two vials, one right and one wrong. <@${targetId}> picked the fatal one.`,
+  ]);
+}
+
+export function chemistTargetSurvivedDmLine(): string {
+  return pickRandom([
+    "The Chemist dragged you into a midnight tasting. At the last moment you grabbed the safe vial — they swallowed the poison and never saw the sunrise.",
+    'You faced the Chemist\'s two vials in the dark. Somehow you chose right. They didn\'t.',
+    'The Chemist forced a choice on you and lost their own gamble. You live.',
+  ]);
+}
+
+export function chemistTargetDiedFromDuelDmLine(): string {
+  return pickRandom([
+    'The Chemist visited you for a late-night drink. You chose the wrong potion and died from the poison.',
+    'Two vials, one lethal. The Chemist offered both — and the one you reached for was poison.',
+    'A midnight visitor with potions in hand. The one you chose was poison.',
+  ]);
+}
+
+// --- Arsonist DMs ---
+
+export function arsonistDousedTargetDmLine(targetId: string): string {
+  return pickRandom([
+    `You quietly drenched <@${targetId}>'s house in kerosene. It will stay primed until you choose to ignite.`,
+    `<@${targetId}>'s home is now coated in fuel, ready for your signal.`,
+    `You marked <@${targetId}>'s house for fire. When you ignite, it will burn.`,
+  ]);
+}
+
+// --- Serial Killer DMs ---
+
+export function skBlockedByDoctorDmLine(): string {
+  return pickRandom([
+    'You struck from the shadows, but someone was already guarding your target. Your kill was stopped by a doctor.',
+    'Your blade found nothing — a doctor stepped in and pulled your target out of reach.',
+    'You came for blood, but a healer was already there. The doctor blocked your kill.',
+  ]);
+}
+
+export function wolfStabbedBySKDmLine(): string {
+  return pickRandom([
+    'You lunged for your prey, but steel flashed in the dark. A knife found you before your fangs could.',
+    'You came for blood and found a blade instead. The Serial Killer was ready for you.',
+    'Your prey turned hunter. Before your fangs could close, cold steel found its mark.',
+  ]);
+}

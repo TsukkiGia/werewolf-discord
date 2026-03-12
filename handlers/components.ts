@@ -341,15 +341,10 @@ export async function handleTroublemakerDoubleLynch(
 
   if (game.troublemaker_double_lynch_day != null) {
     return res.send({
-      type: InteractionResponseType.UPDATE_MESSAGE,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-        components: [
-          {
-            type: MessageComponentTypes.TEXT_DISPLAY,
-            content: 'You have already made trouble earlier this game. You can only do this once.',
-          },
-        ],
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'You have already made trouble earlier this game. You can only do this once.',
       },
     });
   }
@@ -357,30 +352,20 @@ export async function handleTroublemakerDoubleLynch(
   const set = await setTroublemakerDoubleLynchDay(gameId, currentDay);
   if (!set) {
     return res.send({
-      type: InteractionResponseType.UPDATE_MESSAGE,
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
       data: {
-        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-        components: [
-          {
-            type: MessageComponentTypes.TEXT_DISPLAY,
-            content: 'Someone else has already made trouble this game.',
-          },
-        ],
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'Someone else has already made trouble this game.',
       },
     });
   }
 
   await res.send({
-    type: InteractionResponseType.UPDATE_MESSAGE,
+    type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
     data: {
-      flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-      components: [
-        {
-          type: MessageComponentTypes.TEXT_DISPLAY,
-          content:
-            'You kick over the hornet’s nest. The village is in an uproar — they will attempt **two lynches** today.',
-        },
-      ],
+      flags: InteractionResponseFlags.EPHEMERAL,
+      content:
+        'You kick over the hornet’s nest. The village is in an uproar — they will attempt **two lynches** today.',
     },
   });
 
