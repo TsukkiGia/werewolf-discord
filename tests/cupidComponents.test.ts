@@ -53,6 +53,10 @@ vi.mock('../game/engine/gameOrchestrator.js', () => ({
   resolveHunterShot: vi.fn(),
 }));
 
+vi.mock('../game/engine/dmRoles.js', () => ({
+  getDisplayName: async (userId: string) => userId,
+}));
+
 // Minimal role registry stub so handlers/components can import it without caring
 // about the specific role behavior for these tests.
 vi.mock('../game/balancing/roleRegistry.js', () => ({

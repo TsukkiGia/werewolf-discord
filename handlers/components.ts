@@ -15,6 +15,7 @@ import {
   setTroublemakerDoubleLynchDay,
 } from '../db.js';
 import { postChannelMessage, sendDmMessage } from '../utils.js';
+import { getDisplayName } from '../game/engine/dmRoles.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
 import { getInteractionUserId } from '../interactionHelpers.js';
 import { maybeResolveNight, maybeResolveDay, resolveHunterShot } from '../game/engine/gameOrchestrator.js';
@@ -141,9 +142,16 @@ export async function handleCupidFirstPick(req: Request, res: Response, componen
 
   cupidFirstPicks.set(`${gameId}:${cupidId}`, firstId);
 
-  const secondOptions = players
-    .filter((p) => p.is_alive && p.user_id !== cupidId && p.user_id !== firstId)
-    .map((p) => ({ label: `<@${p.user_id}>`, value: p.user_id }));
+  const secondCandidates = players.filter(
+    (p) => p.is_alive && p.user_id !== cupidId && p.user_id !== firstId,
+  );
+
+  const secondOptions = await Promise.all(
+    secondCandidates.map(async (p) => ({
+      label: await getDisplayName(p.user_id, game.guild_id),
+      value: p.user_id,
+    })),
+  );
 
   if (secondOptions.length === 0) {
     return res.send({
