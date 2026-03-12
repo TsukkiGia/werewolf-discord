@@ -891,10 +891,11 @@ export async function maybeResolveDay(
     }
 
     // Atomically claim resolution.
-    // First lynch on a double-lynch day: transition to 'day_second_lynch' (no counter change).
-    // Everything else (normal day, second lynch, no-lynch): advance to 'night'.
+    // First lynch on a double-lynch day: transition to 'day_second_lynch' (no counter change),
+    // regardless of whether the first round produced a lynch or no-lynch.
+    // Everything else (normal day, second lynch): advance to 'night'.
     let claimed: boolean;
-    if (isFirstLynchOfDouble && resolution.state !== 'no_lynch') {
+    if (isFirstLynchOfDouble) {
       claimed = await beginSecondLynchPhase(gameId);
     } else {
       claimed = (await advancePhase(gameId, game.status)) !== null;
@@ -908,13 +909,27 @@ export async function maybeResolveDay(
 
     // --- 2. No-lynch result ---
     if (resolution.state === 'no_lynch') {
-      await safePostToChannel(
-        game.channel_id,
-        [buildNoLynchLine(dayNumber), buildNightFallsLine()],
-        'no-lynch day resolution message',
-      );
-      await dmNightAndSchedule(gameId);
-      return;
+      if (isFirstLynchOfDouble) {
+        // First round on a TroubleMaker double-lynch day: no one is lynched,
+        // but the village still gets a second voting round instead of going to night.
+        await safePostToChannel(
+          game.channel_id,
+          [buildNoLynchLine(dayNumber)],
+          'no-lynch first lynch on double-lynch day',
+        );
+        scheduleDayVoting(gameId, dayNumber, true);
+        scheduleDayTimeout(gameId, dayNumber, true);
+        return;
+      } else {
+        // Normal day or second lynch round: no-lynch falls through to night.
+        await safePostToChannel(
+          game.channel_id,
+          [buildNoLynchLine(dayNumber), buildNightFallsLine()],
+          'no-lynch day resolution message',
+        );
+        await dmNightAndSchedule(gameId);
+        return;
+      }
     }
 
     // --- 3. Apply lynch ---
