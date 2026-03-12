@@ -163,6 +163,7 @@ describe('Cupid component handlers', () => {
     expect(recordNightActionMock).toHaveBeenCalledWith({
       gameId: 'g1',
       night: 1,
+      round: 1,
       actorId: 'cupid',
       targetId: 'b',
       actionKind: 'link',

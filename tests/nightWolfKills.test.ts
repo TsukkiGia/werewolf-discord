@@ -16,6 +16,7 @@ const markPlayerDeadMock = vi.fn(
 );
 const endGameMock = vi.fn();
 const getLoversMock = vi.fn(async () => null);
+const clearWolfExtraKillsForNextNightMock = vi.fn();
 
 vi.mock('../db.js', () => ({
   getGame: getGameMock,
@@ -28,7 +29,7 @@ vi.mock('../db.js', () => ({
   getPendingHunterShot: vi.fn(),
   resolveHunterShotRecord: vi.fn(),
   incrementWolfExtraKillsForNextNight: vi.fn(),
-  clearWolfExtraKillsForNextNight: vi.fn(),
+  clearWolfExtraKillsForNextNight: clearWolfExtraKillsForNextNightMock,
   getLovers: getLoversMock,
 }));
 
@@ -91,6 +92,7 @@ function makeAction(partial: Partial<NightActionRow>): NightActionRow {
     id: 1,
     game_id: 'g1',
     night: 1,
+    round: 1,
     actor_id: 'actor',
     target_id: null,
     action_kind: 'none',
@@ -112,6 +114,7 @@ beforeEach(() => {
   openDmChannelMock.mockReset();
   postChannelMessageMock.mockReset();
   getLoversMock.mockReset();
+  clearWolfExtraKillsForNextNightMock.mockReset();
 });
 
 describe('maybeResolveNight — wolf kills with home/away and visitors', () => {
@@ -398,5 +401,70 @@ describe('maybeResolveNight — wolves vs Serial Killer', () => {
     // Wolves should miss the Serial Killer because they are away,
     // but the Serial Killer should still successfully kill their own target.
     expect(killedIds).toEqual(['v']);
+  });
+});
+
+describe('maybeResolveNight — Wolf Cub extra kill nights', () => {
+  it('resolves two separate wolf kills from round 1 and round 2 votes', async () => {
+    getGameMock.mockResolvedValue({
+      id: 'g1',
+      status: 'night',
+      current_night: 1,
+      current_day: 0,
+      wolf_extra_kills_next_night: 1,
+      channel_id: 'channel:g1',
+    });
+
+    const players: GamePlayerState[] = [
+      makePlayer({ user_id: 'wolf', role: 'werewolf', alignment: 'wolf' }),
+      makePlayer({ user_id: 'v1', role: 'villager', alignment: 'town' }),
+      makePlayer({ user_id: 'v2', role: 'villager', alignment: 'town' }),
+    ];
+
+    // All calls to getPlayersForGame during this night see the same snapshot.
+    getPlayersForGameMock.mockResolvedValue(players);
+
+    const actions: NightActionRow[] = [
+      // Round 1: wolf targets v1
+      makeAction({
+        id: 1,
+        round: 1,
+        actor_id: 'wolf',
+        target_id: 'v1',
+        action_kind: 'kill',
+        role: 'werewolf',
+      }),
+      // Round 2: wolf targets v2
+      makeAction({
+        id: 2,
+        round: 2,
+        actor_id: 'wolf',
+        target_id: 'v2',
+        action_kind: 'kill',
+        role: 'werewolf',
+      }),
+    ];
+    getNightActionsForNightMock.mockResolvedValue(actions);
+
+    // Night is ready once all round-1 actions are in; only v1 is a round-1 target.
+    evaluateNightResolutionMock.mockReturnValue({
+      state: 'ready',
+      killTargets: ['v1'],
+      protectTargets: [],
+      visitActions: [],
+    });
+
+    advancePhaseMock.mockResolvedValue('day');
+
+    await maybeResolveNight('g1');
+
+    const killedIds = markPlayerDeadMock.mock.calls
+      .map(([, id]) => id)
+      .sort();
+    // Both round-1 and round-2 wolf victims should die.
+    expect(killedIds).toEqual(['v1', 'v2'].sort());
+
+    // The Wolf Cub bonus flag should be cleared after a bonus night resolves.
+    expect(clearWolfExtraKillsForNextNightMock).toHaveBeenCalledWith('g1');
   });
 });

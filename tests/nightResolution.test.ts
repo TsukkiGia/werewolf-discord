@@ -18,6 +18,7 @@ function makeAction(partial: Partial<NightActionRow>): NightActionRow {
     id: 1,
     game_id: 'g',
     night: 1,
+    round: 1,
     actor_id: 'u',
     target_id: null,
     action_kind: 'none',

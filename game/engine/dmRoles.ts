@@ -2,7 +2,7 @@ import {
   InteractionResponseFlags,
   MessageComponentTypes,
 } from 'discord-interactions';
-import type { AssignedRole } from '../types.js';
+import { WOLF_PACK_ROLES, type AssignedRole, type RoleName } from '../types.js';
 import type { GameRow } from '../../db/games.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
@@ -338,6 +338,43 @@ export async function dmNightActionsForAlivePlayers(params: {
     playerIds: targetIds,
     players: alivePlayers,
     assignments,
+    nightNumber,
+  });
+}
+
+export async function dmWolfExtraKillPrompts(params: {
+  game: GameRow;
+  players: GamePlayerState[];
+}): Promise<void> {
+  const { game, players } = params;
+
+  const alivePlayers = players.filter((p) => p.is_alive);
+  if (alivePlayers.length === 0) return;
+
+  const nightNumber = game.current_night || 1;
+
+  const wolfAssignments: AssignedRole[] = alivePlayers
+    .map((p) => {
+      if (!isRoleName(p.role)) return null;
+      if (!WOLF_PACK_ROLES.has(p.role as RoleName)) return null;
+      const def = ROLE_REGISTRY[p.role];
+      return {
+        userId: p.user_id,
+        role: def.name,
+        alignment: def.alignment,
+      };
+    })
+    .filter((a): a is AssignedRole => a !== null);
+
+  if (wolfAssignments.length === 0) return;
+
+  const targetIds = alivePlayers.map((p) => p.user_id);
+
+  await dmNightPromptsCore({
+    game,
+    playerIds: targetIds,
+    players: alivePlayers,
+    assignments: wolfAssignments,
     nightNumber,
   });
 }

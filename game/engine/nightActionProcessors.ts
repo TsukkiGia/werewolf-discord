@@ -695,24 +695,24 @@ export async function processWolfKillActions(params: {
   gameId: string;
   players: GamePlayerState[];
   actions: NightActionRow[];
-  killTargets: string[];
+  killTargetsRound1: string[];
+  killTargetsRound2: string[];
   protectTargets: string[];
-  wolfExtraKills: number;
 }): Promise<WolfKillActionResult> {
-  const { gameId, players, actions, killTargets, protectTargets, wolfExtraKills } = params;
+  const { gameId, players, actions, killTargetsRound1, killTargetsRound2, protectTargets } = params;
 
   const killedIds: string[] = [];
   const nightDeaths: NightDeathInfo[] = [];
   let biteConvertedId: string | null = null;
 
-  const maxWolfVictims = 1 + wolfExtraKills;
   const wolfChosenVictims: string[] = [];
-  let remainingKillTargets = killTargets.slice();
-  while (wolfChosenVictims.length < maxWolfVictims) {
-    const v = chooseKillVictim(remainingKillTargets);
-    if (!v) break;
-    wolfChosenVictims.push(v);
-    remainingKillTargets = remainingKillTargets.filter((id) => id !== v);
+  const firstVictim = chooseKillVictim(killTargetsRound1);
+  if (firstVictim) {
+    wolfChosenVictims.push(firstVictim);
+  }
+  const secondVictim = chooseKillVictim(killTargetsRound2);
+  if (secondVictim) {
+    wolfChosenVictims.push(secondVictim);
   }
 
   const protectedSet = new Set(protectTargets);

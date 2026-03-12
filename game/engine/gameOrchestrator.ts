@@ -40,7 +40,12 @@ import {
   buildNightFallsLine,
   buildNoLynchLine,
 } from './status.js';
-import { dmNightActionsForAlivePlayers, disableDayVotePrompts, dmTroublemakerDiscussPrompt } from './dmRoles.js';
+import {
+  dmNightActionsForAlivePlayers,
+  dmWolfExtraKillPrompts,
+  disableDayVotePrompts,
+  dmTroublemakerDiscussPrompt,
+} from './dmRoles.js';
 import { triggerHunterShot } from './hunterShot.js';
 import { scheduleDayVoting } from '../../jobs/dayVoting.js';
 import { scheduleNightTimeout } from '../../jobs/nightTimeout.js';
@@ -231,15 +236,30 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
     const nightNumber = game.current_night || 1;
     const hasWolfExtraKill = (game.wolf_extra_kills_next_night ?? 0) > 0;
-    const wolfExtraKills = hasWolfExtraKill ? 1 : 0;
 
     // --- 1. Check if all night actions are in ---
     const players = await getPlayersForGame(gameId);
-    const actions = await getNightActionsForNight(gameId, nightNumber);
+    const allActions = await getNightActionsForNight(gameId, nightNumber);
+    const actionsRound1 = allActions.filter((a) => a.round === 1);
+    const actionsRound2 = allActions.filter((a) => a.round === 2);
 
-    const nightResolution = evaluateNightResolution(players, actions, nightNumber);
+    const nightResolution = evaluateNightResolution(players, actionsRound1, nightNumber);
     if (nightResolution.state === 'pending') {
       return;
+    }
+
+    // On Wolf Cub bonus nights, once all first-round actions are in, open a
+    // second-round wolf vote before resolving the night. Only do this once,
+    // and only if there is at least one alive wolf-pack member.
+    if (hasWolfExtraKill && actionsRound2.length === 0) {
+      const aliveWolves = players.filter(
+        (p) => p.is_alive && WOLF_PACK_ROLES.has(p.role as RoleName),
+      );
+      if (aliveWolves.length > 0) {
+        await dmWolfExtraKillPrompts({ game, players });
+        await scheduleNightTimeout(gameId, nightNumber, true);
+        return;
+      }
     }
 
     // Atomically claim resolution: advance night -> day.
@@ -248,13 +268,24 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     const claimed = await advancePhase(gameId, 'night');
     if (!claimed) return;
 
-    const { killTargets, protectTargets, visitActions } = nightResolution;
+    const { killTargets: killTargetsRound1, protectTargets, visitActions } = nightResolution;
+
+    const killTargetsRound2 = hasWolfExtraKill
+      ? actionsRound2
+          .filter(
+            (a) =>
+              a.action_kind === 'kill' &&
+              a.target_id &&
+              WOLF_PACK_ROLES.has(a.role as RoleName),
+          )
+          .map((a) => a.target_id as string)
+      : [];
 
     // --- 2. Seer inspections (DM only, no kills yet) ---
-    await processSeerActions(players, actions);
+    await processSeerActions(players, actionsRound1);
 
     // --- 2b. Thief role swap (night 1 only) ---
-    const { thiefActed } = await processThiefActions(gameId, players, actions);
+    const { thiefActed } = await processThiefActions(gameId, players, actionsRound1);
 
     // --- 3–7. Apply all killing night actions and refresh player state ---
     const {
@@ -268,11 +299,11 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       gameId,
       nightNumber,
       players,
-      actions,
-      killTargets,
+      actions: allActions,
+      killTargetsRound1,
+      killTargetsRound2,
       protectTargets,
       visitActions,
-      wolfExtraKills,
     });
 
     // Apply Lover sorrow deaths after all primary night kills have resolved.
@@ -564,20 +595,20 @@ async function resolveNightActionsAndCollectDeaths(params: {
   nightNumber: number;
   players: GamePlayerState[];
   actions: NightActionRow[];
-  killTargets: string[];
+  killTargetsRound1: string[];
+  killTargetsRound2: string[];
   protectTargets: string[];
   visitActions: { harlotId: string; targetId: string }[];
-  wolfExtraKills: number;
 }): Promise<NightActionResolutionOutcome> {
   const {
     gameId,
     nightNumber,
     players,
     actions,
-    killTargets,
+    killTargetsRound1,
+    killTargetsRound2,
     protectTargets,
     visitActions,
-    wolfExtraKills,
   } =
     params;
 
@@ -590,9 +621,9 @@ async function resolveNightActionsAndCollectDeaths(params: {
     gameId,
     players,
     actions,
-    killTargets,
+    killTargetsRound1,
+    killTargetsRound2,
     protectTargets,
-    wolfExtraKills,
   });
 
   // --- Doctor actions ---
@@ -898,6 +929,9 @@ export async function maybeResolveDay(
 
     if (lynched.role === 'wolf_cub') {
       await notifyWolfCubPackDeath(gameId, lynchId, updatedPlayers);
+    } else if (daySorrowVictim && daySorrowVictim.role === 'wolf_cub') {
+      // Wolf Cub died from Lover sorrow after a lynch — grant the extra kill bonus.
+      await notifyWolfCubPackDeath(gameId, daySorrowVictim.user_id, updatedPlayers);
     }
 
     // --- 4. Hunter reactive shot ---
@@ -975,6 +1009,19 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       ? updatedPlayers.find((p) => p.user_id === hunterSorrowVictimId) ?? null
       : null;
 
+    // If the Wolf Cub died from the Hunter's shot or from Lover sorrow as a result,
+    // grant the wolf-pack extra kill bonus for the following night.
+    if (targetId) {
+      const shotTarget = updatedPlayers.find((p) => p.user_id === targetId) ?? null;
+      if (shotTarget && shotTarget.role === 'wolf_cub') {
+        await notifyWolfCubPackDeath(gameId, shotTarget.user_id, updatedPlayers);
+      } else if (hunterSorrowVictim && hunterSorrowVictim.role === 'wolf_cub') {
+        await notifyWolfCubPackDeath(gameId, hunterSorrowVictim.user_id, updatedPlayers);
+      }
+    } else if (hunterSorrowVictim && hunterSorrowVictim.role === 'wolf_cub') {
+      await notifyWolfCubPackDeath(gameId, hunterSorrowVictim.user_id, updatedPlayers);
+    }
+
     // After the shot and any Lover sorrow, allow a Traitor to awaken as a wolf
     // if the shot killed the last existing wolf.
     await maybeConvertTraitorToWerewolf(gameId);
@@ -982,11 +1029,11 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
 
     const win = evaluateWinCondition(playersAfterTraitor);
 
-      if (game?.channel_id) {
+    if (game?.channel_id) {
       const lines: string[] = [];
-        if (targetId) {
-          const target = updatedPlayers.find((p) => p.user_id === targetId);
-          const hunter = updatedPlayers.find((p) => p.user_id === hunterId);
+      if (targetId) {
+        const target = updatedPlayers.find((p) => p.user_id === targetId);
+        const hunter = updatedPlayers.find((p) => p.user_id === hunterId);
         if (target && hunter) {
           lines.push(hunterShotLine(hunter, target));
         }

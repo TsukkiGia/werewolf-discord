@@ -17,6 +17,7 @@ import {
 import { postChannelMessage, sendDmMessage } from '../utils.js';
 import { getDisplayName } from '../game/engine/dmRoles.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
+import { WOLF_PACK_ROLES } from '../game/types.js';
 import { getInteractionUserId } from '../interactionHelpers.js';
 import { maybeResolveNight, maybeResolveDay, resolveHunterShot } from '../game/engine/gameOrchestrator.js';
 import { buildJoinClosedComponents } from './commands.js';
@@ -248,6 +249,7 @@ export async function handleCupidSecondPick(req: Request, res: Response, compone
   await recordNightAction({
     gameId,
     night: nightNumber,
+    round: 1,
     actorId: cupidId,
     targetId: secondId,
     actionKind: 'link',
@@ -403,20 +405,33 @@ export async function handleNightAction(req: Request, res: Response, componentId
 
   const nightNumber = game.current_night || 1;
 
-  if (await hasNightAction(gameId, nightNumber, actorId)) {
-    return res.send({
-      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
-      data: {
-        flags: InteractionResponseFlags.EPHEMERAL,
-        content: 'You have already submitted your night action. It cannot be changed.',
-      },
-    });
-  }
-
   if (!isRoleName(role)) {
     return res.status(400).json({ error: 'invalid role in night action payload' });
   }
   const def = ROLE_REGISTRY[role];
+
+  const hasWolfExtraKill = (game.wolf_extra_kills_next_night ?? 0) > 0;
+  const isWolfPackRole = WOLF_PACK_ROLES.has(def.name);
+
+  // Round 1 by default; wolves with a Cub bonus get a second round after they have already acted once.
+  let round = 1;
+  if (
+    hasWolfExtraKill &&
+    isWolfPackRole &&
+    (await hasNightAction(gameId, nightNumber, 1, actorId))
+  ) {
+    round = 2;
+  }
+
+  if (await hasNightAction(gameId, nightNumber, round, actorId)) {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'You have already submitted your night action for this round. It cannot be changed.',
+      },
+    });
+  }
 
   const isIgnite = targetId === '__ARSONIST_IGNITE__';
   const isPass = targetId === NIGHT_PASS_SENTINEL;
@@ -427,6 +442,7 @@ export async function handleNightAction(req: Request, res: Response, componentId
   const inserted = await recordNightAction({
     gameId,
     night: nightNumber,
+    round,
     actorId,
     targetId: finalTargetId,
     actionKind: finalActionKind,
