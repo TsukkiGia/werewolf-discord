@@ -12,8 +12,15 @@ import {
   harlotVisitNotificationLine,
   thiefNewRoleDmLine,
   thiefTargetDmLine,
+  cultConvertedDmLine,
+  cultNewMemberNotifyDmLine,
+  cultWolfImmuneDmLine,
+  cultHunterNotCultistDmLine,
+  cultHunterCultistKilledDmLine,
+  cultHunterBackfireNotifyDmLine,
 } from '../strings/narration.js';
 import { addDousedTarget, clearDousedTargets, getDousedTargets } from '../../db/arsonist.js';
+import { addCultMember, getCultMemberIds, getNewestCultMemberId } from '../../db/cult.js';
 
 async function safeDm(userId: string, content: string, context: string): Promise<void> {
   try {
@@ -32,7 +39,7 @@ function buildPlayersById(players: GamePlayerState[]): Map<string, GamePlayerSta
   return map;
 }
 
-const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'potion', 'protect', 'steal'];
+const AWAY_ACTION_KINDS: NightActionKind[] = ['visit', 'kill', 'potion', 'protect', 'steal', 'convert', 'hunt'];
 
 export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
   const away = new Set<string>();
@@ -98,6 +105,7 @@ export async function processSeerActions(
         }
 
         default: {
+          console.error(`Unseen Role ${action.role}`)
           // Any other inspect-capable role (future-proof fallback)
           content = `Your vision reveals that ${userTag} is **${target.role}**.`;
           break;
@@ -497,4 +505,114 @@ export async function processThiefActions(
   await safeDm(target.user_id, thiefTargetDmLine(), 'thief target');
 
   return { thiefActed: true };
+}
+
+/**
+ * Process all cultist convert actions (odd nights only).
+ *
+ * All alive cultists vote; plurality wins. The chosen target is then:
+ *   - Wolf-aligned → immune, DM cultists
+ *   - Cult Hunter  → backfire: newest cult member dies, DM cultists + hunter
+ *   - Otherwise    → convert: target becomes cultist, DM all parties
+ */
+export async function processCultistActions(
+  gameId: string,
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+  killedIds: string[],
+): Promise<{ converted: boolean; backfiredVictimId: string | null }> {
+  const aliveCultists = players.filter((p) => p.is_alive && p.role === 'cultist');
+  if (aliveCultists.length === 0) return { converted: false, backfiredVictimId: null };
+
+  const convertTargets = actions
+    .filter((a) => a.action_kind === 'convert' && a.target_id)
+    .map((a) => a.target_id as string);
+
+  if (convertTargets.length === 0) return { converted: false, backfiredVictimId: null };
+
+  // Plurality vote — same mechanism as wolf kill voting.
+  const counts = new Map<string, number>();
+  for (const id of convertTargets) counts.set(id, (counts.get(id) ?? 0) + 1);
+  let chosenTarget: string | null = null;
+  let bestCount = 0;
+  let tie = false;
+  for (const [id, count] of counts) {
+    if (count > bestCount) { bestCount = count; chosenTarget = id; tie = false; }
+    else if (count === bestCount) { tie = true; }
+  }
+  if (tie || !chosenTarget) return { converted: false, backfiredVictimId: null };
+
+  const target = players.find((p) => p.user_id === chosenTarget && p.is_alive);
+  if (!target) return { converted: false, backfiredVictimId: null };
+
+  const cultistIds = aliveCultists.map((p) => p.user_id);
+
+  // Wolf-aligned players are immune.
+  if (target.alignment === 'wolf') {
+    await Promise.all(cultistIds.map((id) => safeDm(id, cultWolfImmuneDmLine(), 'cult wolf immune')));
+    return { converted: false, backfiredVictimId: null };
+  }
+
+  // Targeting the Cult Hunter: newest member dies instead.
+  if (target.role === 'cult_hunter') {
+    const newestId = await getNewestCultMemberId(gameId);
+    if (newestId && !killedIds.includes(newestId)) {
+      await markPlayerDead(gameId, newestId);
+      killedIds.push(newestId);
+      await safeDm(target.user_id, cultHunterBackfireNotifyDmLine(), 'cult hunter backfire notify');
+      return { converted: false, backfiredVictimId: newestId };
+    }
+    return { converted: false, backfiredVictimId: null };
+  }
+
+  // Successful conversion.
+  await setPlayerRoleAndAlignment(gameId, target.user_id, 'cultist', 'cult');
+  await addCultMember(gameId, target.user_id);
+
+  const allCultIds = await getCultMemberIds(gameId);
+  const existingCultIds = allCultIds.filter((id) => id !== target.user_id);
+
+  await safeDm(target.user_id, cultConvertedDmLine(existingCultIds), 'cult convert target');
+  await Promise.all(
+    cultistIds.map((id) => safeDm(id, cultNewMemberNotifyDmLine(target.user_id), 'cult new member notify')),
+  );
+
+  return { converted: true, backfiredVictimId: null };
+}
+
+/**
+ * Process the Cult Hunter's hunt action.
+ *
+ * If the target is a cultist, they are killed. Otherwise the hunter is
+ * notified that their target is not a cultist.
+ */
+export async function processCultHunterActions(
+  gameId: string,
+  players: GamePlayerState[],
+  actions: NightActionRow[],
+  killedIds: string[],
+): Promise<{ killedCultistId: string | null }> {
+  const hunter = players.find((p) => p.is_alive && p.role === 'cult_hunter');
+  if (!hunter) return { killedCultistId: null };
+
+  const action = actions.find(
+    (a) => a.actor_id === hunter.user_id && a.action_kind === 'hunt' && a.target_id,
+  );
+  if (!action || !action.target_id) return { killedCultistId: null };
+
+  const target = players.find((p) => p.user_id === action.target_id && p.is_alive);
+  if (!target) return { killedCultistId: null };
+
+  if (target.alignment !== 'cult') {
+    await safeDm(hunter.user_id, cultHunterNotCultistDmLine(), 'cult hunter miss');
+    return { killedCultistId: null };
+  }
+
+  if (!killedIds.includes(target.user_id)) {
+    await markPlayerDead(gameId, target.user_id);
+    killedIds.push(target.user_id);
+  }
+
+  await safeDm(hunter.user_id, cultHunterCultistKilledDmLine(target.user_id), 'cult hunter kill');
+  return { killedCultistId: target.user_id };
 }

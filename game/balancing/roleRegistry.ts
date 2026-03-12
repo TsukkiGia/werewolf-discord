@@ -18,6 +18,8 @@ import { TannerRole } from '../roles/tanner.js';
 import { TraitorRole } from '../roles/traitor.js';
 import { ThiefRole } from '../roles/thief.js';
 import { TroubleMakerRole } from '../roles/troublemaker.js';
+import { CultistRole } from '../roles/cultist.js';
+import { CultHunterRole } from '../roles/cultHunter.js';
 import type { RoleName } from '../types.js';
 
 export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
@@ -40,6 +42,8 @@ export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
   tanner: TannerRole,
   thief: ThiefRole,
   troublemaker: TroubleMakerRole,
+  cultist: CultistRole,
+  cult_hunter: CultHunterRole,
 };
 
 export function isRoleName(value: unknown): value is RoleName {

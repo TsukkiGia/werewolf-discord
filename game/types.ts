@@ -17,12 +17,14 @@ export type RoleName =
   | 'tanner'
   | 'traitor'
   | 'thief'
-  | 'troublemaker';
+  | 'troublemaker'
+  | 'cultist'
+  | 'cult_hunter';
 
 /** The wolf_core roles that form the pack (excludes wolf_support like sorcerer). */
 export const WOLF_PACK_ROLES: ReadonlySet<RoleName> = new Set(['werewolf', 'wolf_cub', 'alpha_wolf']);
 
-export type Alignment = 'wolf' | 'town' | 'neutral';
+export type Alignment = 'wolf' | 'town' | 'neutral' | 'cult';
 
 // High-level balancing buckets. These describe how a role is used when
 // constructing setups, independent of its exact name.
@@ -48,7 +50,7 @@ export interface RoleIntroContext {
   allAssignments: AssignedRole[];
 }
 
-export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion' | 'ignite' | 'link' | 'steal';
+export type NightActionKind = 'none' | 'kill' | 'inspect' | 'protect' | 'visit' | 'potion' | 'ignite' | 'link' | 'steal' | 'convert' | 'hunt';
 
 export interface NightActionDefinition {
   kind: NightActionKind;

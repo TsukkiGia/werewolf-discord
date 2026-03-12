@@ -6,7 +6,7 @@ import { validateSetup } from './validateSetup.js';
 
 const WOLF_PACK: RoleName[] = ['werewolf', 'wolf_cub', 'alpha_wolf'];
 
-const NEUTRAL_ROLES: RoleName[] = ['arsonist', 'tanner', 'traitor'];
+const NEUTRAL_ROLES: RoleName[] = ['arsonist', 'tanner', 'traitor', 'cultist'];
 
 /**
  * Town power roles with their balance strength values.
@@ -165,11 +165,20 @@ function attemptSetup(playerCount: number): RoleName[] | null {
     }
   }
 
+  // Cult Hunter: always added when a cultist is in the setup.
+  // Takes a player slot before the power budget is calculated.
+  const hasCultist = roles.includes('cultist');
+  if (hasCultist && isEligible('cult_hunter', playerCount)) {
+    roles.push('cult_hunter');
+  }
+
   // Stage 2: town power roles funded by the opposition budget.
   // Reserve at least 1 slot for a plain villager so the village core is
   // always represented.
   const alphaBonus = wolves.includes('alpha_wolf') ? 0.75 : 0;
-  const budget = wolfCount * 2.0 + 1.0 + (neutralAdded ? 1.5 : 0) + alphaBonus;
+  // Cult adds extra threat beyond other neutrals: +1.5 on top of the base neutral bonus.
+  const cultBonus = hasCultist ? 1.5 : 0;
+  const budget = wolfCount * 2.0 + 1.0 + (neutralAdded ? 1.5 : 0) + alphaBonus + cultBonus;
   const powerRoles = pickTownPowerRoles(budget, playerCount, playerCount - roles.length - 1);
   roles.push(...powerRoles);
 

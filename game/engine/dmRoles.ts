@@ -9,6 +9,7 @@ import { ROLE_REGISTRY, isRoleName } from '../balancing/roleRegistry.js';
 import { DiscordRequest, openDmChannel, postChannelMessage, patchChannelMessage } from '../../utils.js';
 import { recordNightActionPrompt } from '../../db/nightActions.js';
 import { getDousedTargets } from '../../db/arsonist.js';
+import { getCultMemberIds, addCultMember } from '../../db/cult.js';
 import { recordDayVotePrompt, getDayVotePrompts } from '../../db/dayVotePrompts.js';
 import { logEvent } from '../../logging.js';
 
@@ -60,15 +61,24 @@ export async function getDisplayName(userId: string, guildId: string | null): Pr
 async function dmNightPromptsCore(params: {
   game: GameRow;
   playerIds: string[];
+  players: GamePlayerState[];
   assignments: AssignedRole[];
   nightNumber: number;
 }): Promise<void> {
-  const { game, playerIds, assignments, nightNumber } = params;
+  const { game, playerIds, players, assignments, nightNumber } = params;
 
   const dousedTargets =
     assignments.some((a) => a.role === 'arsonist') && game.id
       ? await getDousedTargets(game.id)
       : [];
+
+  const cultMemberIds =
+    assignments.some((a) => a.role === 'cultist') && game.id
+      ? await getCultMemberIds(game.id)
+      : [];
+
+  // Build alignment map from live player state (roles can change mid-game).
+  const alignmentById = new Map(players.map((p) => [p.user_id, p.alignment]));
 
   for (const assignment of assignments) {
     try {
@@ -145,11 +155,23 @@ async function dmNightPromptsCore(params: {
         baseContent += `\nAlready doused: ${dousedLabels.join(', ')}`;
       }
 
+      if (def.name === 'cultist' && cultMemberIds.length > 0) {
+        const cultLabels = await Promise.all(
+          cultMemberIds.map((id) => getDisplayName(id, game.guild_id)),
+        );
+        baseContent += `\nYour cult: ${cultLabels.join(', ')}`;
+      }
+
       const options = [];
       for (const id of playerIds) {
         if (!def.nightAction.canTargetSelf && id === assignment.userId) continue;
         // Arsonist can only see undoused houses as douse targets.
         if (def.name === 'arsonist' && dousedTargets.includes(id)) continue;
+        // Cultist cannot target wolf-aligned players (immune) or existing cultists.
+        if (def.name === 'cultist') {
+          if (alignmentById.get(id) === 'wolf') continue;
+          if (cultMemberIds.includes(id)) continue;
+        }
         const label = await getDisplayName(id, game.guild_id);
         options.push({ label, value: id });
       }
@@ -232,6 +254,12 @@ export async function dmRolesForAssignments(params: {
       await postChannelMessage(dmChannelId, {
         content: baseContent,
       });
+
+      // Seed the starting cultist into the cult_members table so the
+      // "newest member" and member-list logic works from night 1.
+      if (assignment.role === 'cultist' && game.id) {
+        await addCultMember(game.id, assignment.userId);
+      }
     } catch (err) {
       console.error('Failed to DM role to user', assignment.userId, err);
     }
@@ -299,6 +327,7 @@ export async function dmNightActionsForAlivePlayers(params: {
   await dmNightPromptsCore({
     game,
     playerIds: targetIds,
+    players: alivePlayers,
     assignments,
     nightNumber,
   });

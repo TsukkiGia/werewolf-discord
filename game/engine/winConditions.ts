@@ -4,9 +4,11 @@ import {
   townWinLine,
   wolfWinLine,
   arsonistWinLine,
+  cultWinLine,
+  revealCultistsLine,
 } from '../strings/narration.js';
 
-export type WinSide = 'wolves' | 'town' | 'arsonist';
+export type WinSide = 'wolves' | 'town' | 'arsonist' | 'cult';
 
 export interface WinResult {
   winner: WinSide;
@@ -15,11 +17,15 @@ export interface WinResult {
    * Used for revealing the wolves when the game ends.
    */
   wolves: GamePlayerState[];
+  /**
+   * All cult-aligned players, alive or dead. Populated when winner === 'cult'.
+   */
+  cultists: GamePlayerState[];
 }
 
 /**
  * Build the standard win message lines shown in the channel when the
- * game ends, including revealing the wolves.
+ * game ends, including revealing the wolves (and cultists on cult win).
  */
 export function buildWinLines(win: WinResult): string[] {
   const lines: string[] = [];
@@ -33,11 +39,15 @@ export function buildWinLines(win: WinResult): string[] {
     lines.push(townWinLine());
   } else if (win.winner === 'wolves') {
     lines.push(wolfWinLine());
+  } else if (win.winner === 'cult') {
+    lines.push(cultWinLine());
+    const cultMentions = win.cultists.map((p) => `<@${p.user_id}>`).join(', ');
+    if (cultMentions) lines.push(revealCultistsLine(cultMentions));
   } else {
     lines.push(arsonistWinLine());
   }
 
-  if (wolfMentions) {
+  if (wolfMentions && win.winner !== 'cult') {
     lines.push(revealWolvesLine(wolfMentions));
   }
 
@@ -48,34 +58,40 @@ export function buildWinLines(win: WinResult): string[] {
  * Evaluate the win condition for a Werewolf game based on the current
  * set of players.
  *
- * Rules (v1):
- * - Town wins if there are no alive wolves.
- * - Wolves win if there is at least one wolf and at most one alive town player.
- *   (i.e. wolves win once town is reduced to 1 or 0 players).
- * - Otherwise, the game continues.
+ * Priority order:
+ * 1. Arsonist sole-survivor win.
+ * 2. Cult win: all living players are cult-aligned.
+ * 3. Town win: no wolves and no cultists alive.
+ * 4. Wolf win: wolves outnumber or equal all non-wolf living players.
  */
 export function evaluateWinCondition(players: GamePlayerState[]): WinResult | null {
   const alive = players.filter((p) => p.is_alive);
 
   const wolvesAlive = alive.filter((p) => p.alignment === 'wolf').length;
-  const townAlive = alive.filter((p) => p.alignment === 'town').length;
+  const cultsAlive = alive.filter((p) => p.alignment === 'cult').length;
   const wolfPlayers = players.filter((p) => p.alignment === 'wolf');
+  const cultPlayers = players.filter((p) => p.alignment === 'cult');
 
   // Arsonist wins if they are the only player left alive.
   const arsonistsAlive = alive.filter((p) => p.role === 'arsonist').length;
   if (alive.length === 1 && arsonistsAlive === 1) {
-    return { winner: 'arsonist', wolves: wolfPlayers };
+    return { winner: 'arsonist', wolves: wolfPlayers, cultists: cultPlayers };
   }
 
-  if (wolvesAlive === 0 && wolfPlayers.length > 0 && arsonistsAlive === 0) {
-    return { winner: 'town', wolves: wolfPlayers };
+  // Cult wins if every living player is cult-aligned.
+  if (alive.length > 0 && cultsAlive === alive.length) {
+    return { winner: 'cult', wolves: wolfPlayers, cultists: cultPlayers };
   }
 
-  // Wolves win once there is exactly one town-aligned player left
-  // and at least one wolf still alive. This is checked after each
-  // night kill (and day lynch) to see if the game should end.
-  if (wolvesAlive >= townAlive && wolfPlayers.length > 0) {
-    return { winner: 'wolves', wolves: wolfPlayers };
+  // Town wins if no wolves and no cultists are alive.
+  if (wolvesAlive === 0 && cultsAlive === 0 && wolfPlayers.length > 0 && arsonistsAlive === 0) {
+    return { winner: 'town', wolves: wolfPlayers, cultists: cultPlayers };
+  }
+
+  // Wolves win once they outnumber or equal all non-wolf living players.
+  const nonWolvesAlive = alive.length - wolvesAlive;
+  if (wolvesAlive > 0 && wolvesAlive >= nonWolvesAlive) {
+    return { winner: 'wolves', wolves: wolfPlayers, cultists: cultPlayers };
   }
 
   return null;

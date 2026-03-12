@@ -23,6 +23,8 @@ import {
   processChemistActions,
   processArsonistActions,
   processThiefActions,
+  processCultistActions,
+  processCultHunterActions,
   buildAwayPlayerIds,
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
@@ -72,6 +74,9 @@ import {
   loverSorrowDeathLine,
   wolfCubDeathPackLine,
   thiefStoleLine,
+  cultGainedMemberLine,
+  cultBackfiredLine,
+  cultHunterKilledLine,
 } from '../strings/narration.js';
 
 type NightDeathCause =
@@ -83,7 +88,9 @@ type NightDeathCause =
   | 'chemist_target'
   | 'arsonist_fire_home'
   | 'arsonist_fire_away'
-  | 'lover_sorrow';
+  | 'lover_sorrow'
+  | 'cult_backfire'
+  | 'cult_hunter_kill';
 
 interface NightDeathInfo {
   playerId: string;
@@ -97,6 +104,7 @@ interface NightActionResolutionOutcome {
   nightDeaths: NightDeathInfo[];
   doctorSavedSomeone: boolean;
   biteConvertedId: string | null;
+  cultConverted: boolean;
 }
 
 /** DM all alive players their night-action prompts and schedule the night timeout. */
@@ -181,6 +189,8 @@ async function buildWinLinesWithLovers(
     loverOnWinningSide = aliveLovers.some((p) => p.alignment === 'town');
   } else if (win.winner === 'arsonist') {
     loverOnWinningSide = aliveLovers.some((p) => p.role === 'arsonist');
+  } else if (win.winner === 'cult') {
+    loverOnWinningSide = aliveLovers.some((p) => p.alignment === 'cult');
   }
 
   if (loverOnWinningSide) {
@@ -269,6 +279,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       nightDeaths,
       doctorSavedSomeone,
       biteConvertedId,
+      cultConverted,
     } = await resolveNightActionsAndCollectDeaths({
       gameId,
       nightNumber,
@@ -345,6 +356,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
           nightDeaths,
           updatedPlayers,
           doctorSavedSomeone,
+          cultConverted,
         );
         if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
         lines.push(hunterResolveLine());
@@ -366,6 +378,7 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
         nightDeaths,
         updatedPlayers,
         doctorSavedSomeone,
+        cultConverted,
       );
       if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
       if (thiefActed) lines.push(thiefStoleLine());
@@ -495,6 +508,14 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         }
         break;
       }
+      case 'cult_backfire': {
+        lines.push(cultBackfiredLine(death.playerId));
+        break;
+      }
+      case 'cult_hunter_kill': {
+        lines.push(cultHunterKilledLine(death.playerId));
+        break;
+      }
     }
   }
 
@@ -505,6 +526,7 @@ function buildNightSummaryLines(
   nightDeaths: NightDeathInfo[],
   players: GamePlayerState[],
   doctorSavedSomeone: boolean,
+  cultConverted = false,
 ): string[] {
   const lines: string[] = [];
 
@@ -524,6 +546,10 @@ function buildNightSummaryLines(
       lines.push(arsonistIgniteLine());
     }
     lines.push(...buildNightDeathLines(nightDeaths, players));
+  }
+
+  if (cultConverted) {
+    lines.push(cultGainedMemberLine());
   }
 
   return lines;
@@ -687,7 +713,7 @@ async function resolveNightActionsAndCollectDeaths(params: {
 
     for (const a of actions) {
       if (
-        (a.action_kind === 'visit' || a.action_kind === 'potion' || a.action_kind === 'steal') &&
+        (a.action_kind === 'visit' || a.action_kind === 'potion' || a.action_kind === 'steal' || a.action_kind === 'convert' || a.action_kind === 'hunt') &&
         a.target_id === targetId &&
         !harlotIds.has(a.actor_id)
       ) {
@@ -805,10 +831,29 @@ async function resolveNightActionsAndCollectDeaths(params: {
     });
   }
 
+  // --- Cultist actions (odd nights only) ---
+  const { converted: cultConverted, backfiredVictimId } = await processCultistActions(
+    gameId,
+    players,
+    actions,
+    killedIds,
+  );
+  if (backfiredVictimId && !killedIds.includes(backfiredVictimId)) {
+    killedIds.push(backfiredVictimId);
+    nightDeaths.push({ playerId: backfiredVictimId, cause: 'cult_backfire' });
+  }
+
+  // --- Cult Hunter actions ---
+  const { killedCultistId } = await processCultHunterActions(gameId, players, actions, killedIds);
+  if (killedCultistId && !killedIds.includes(killedCultistId)) {
+    killedIds.push(killedCultistId);
+    nightDeaths.push({ playerId: killedCultistId, cause: 'cult_hunter_kill' });
+  }
+
   // Refresh player state post-kills
   const updatedPlayers = await getPlayersForGame(gameId);
 
-  return { updatedPlayers, killedIds, nightDeaths, doctorSavedSomeone, biteConvertedId };
+  return { updatedPlayers, killedIds, nightDeaths, doctorSavedSomeone, biteConvertedId, cultConverted };
 }
 
 /**

@@ -40,7 +40,7 @@ export const BUCKET_CONFIGS: BucketConfig[] = [
   },
   {
     id: 'neutral',
-    roles: ['arsonist', 'tanner'],
+    roles: ['arsonist', 'tanner', 'cultist'],
   },
   {
     id: 'village_core',

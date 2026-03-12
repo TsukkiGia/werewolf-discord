@@ -374,6 +374,95 @@ export function alphaWolfBiteChannelLine(): string {
   return pickRandom(variants);
 }
 
+export function cultWinLine(): string {
+  const variants = [
+    'The village has been consumed from within. The cult wins!',
+    'Every soul in the village now belongs to the cult. The cult wins!',
+    'The cult has converted them all. There is no one left to resist. The cult wins!',
+  ];
+  return pickRandom(variants);
+}
+
+export function revealCultistsLine(mentions: string): string {
+  return `The cultists were: ${mentions}.`;
+}
+
+export function cultGainedMemberLine(): string {
+  const variants = [
+    'In the dead of night, a whisper passed through the village. Someone has joined the cult.',
+    "The cult's shadow grew longer overnight. A new voice now speaks their creed.",
+    'A villager woke up changed. The cult has claimed another.',
+  ];
+  return pickRandom(variants);
+}
+
+export function cultBackfiredLine(victimId: string): string {
+  const variants = [
+    `The cult reached too far. Their newest member, <@${victimId}>, paid the price instead.`,
+    `The Cult Hunter could not be taken. The cult's newest recruit, <@${victimId}>, died in the attempt.`,
+    `The cult's ambition backfired. <@${victimId}>, their most recent convert, perished.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function cultHunterKilledLine(victimId: string): string {
+  const variants = [
+    `<@${victimId}> was hunted down in the night — a cultist, eliminated.`,
+    `The Cult Hunter struck true. <@${victimId}> has been removed from the cult's ranks.`,
+    `<@${victimId}> was found bearing the mark of the cult and was swiftly eliminated.`,
+  ];
+  return pickRandom(variants);
+}
+
+export function cultConvertedDmLine(cultmateIds: string[]): string {
+  const cultmates = cultmateIds.map((id) => `<@${id}>`).join(', ');
+  return pickRandom([
+    `You have been converted. You are now a **cultist**. Your fellow cultists: ${cultmates}.`,
+    `A cultist visited you in the night. You are now one of them — a **cultist**. Your brothers and sisters: ${cultmates}.`,
+    `Your old life is over. You are now a **cultist**. The cult: ${cultmates}.`,
+  ]);
+}
+
+export function cultNewMemberNotifyDmLine(newMemberId: string): string {
+  return pickRandom([
+    `A new soul has joined the cause. <@${newMemberId}> is now one of us.`,
+    `The cult grows. <@${newMemberId}> has been converted and stands with you.`,
+    `Welcome <@${newMemberId}> to the fold. They are now a cultist.`,
+  ]);
+}
+
+export function cultWolfImmuneDmLine(): string {
+  return pickRandom([
+    'Your target resisted the conversion. They are beyond your reach.',
+    "The conversion failed — your target is immune to the cult's influence.",
+    'Your chosen target could not be turned. Choose differently next time.',
+  ]);
+}
+
+export function cultHunterNotCultistDmLine(): string {
+  return pickRandom([
+    'Your target bears no cult mark. They are not a cultist.',
+    'You hunted carefully, but your target is not one of them.',
+    'No cult mark found. Your target is innocent of the cult.',
+  ]);
+}
+
+export function cultHunterCultistKilledDmLine(targetId: string): string {
+  return pickRandom([
+    `You found the mark. <@${targetId}> was a cultist — they will not convert another.`,
+    `Your hunt was true. <@${targetId}> bore the cult's mark and has been eliminated.`,
+    `<@${targetId}> was a cultist. They are gone now.`,
+  ]);
+}
+
+export function cultHunterBackfireNotifyDmLine(): string {
+  return pickRandom([
+    'The cult came for you last night, but their newest member paid the price instead. Stay vigilant.',
+    'You were targeted by the cult — but their own recruit died in your place.',
+    "The cult's conversion attempt backfired. Their newest member is dead. You are safe.",
+  ]);
+}
+
 export function thiefStoleLine(): string {
   const variants = [
     'Under cover of darkness, a thief crept through the village and stole someone\'s identity.',
