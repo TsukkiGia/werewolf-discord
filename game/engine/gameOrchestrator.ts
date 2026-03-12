@@ -7,8 +7,6 @@ import {
   advancePhase,
   beginSecondLynchPhase,
   endGame,
-  getVotesForDay,
-  getPendingHunterShot,
   resolveHunterShotRecord,
   incrementWolfExtraKillsForNextNight,
   clearWolfExtraKillsForNextNight,
@@ -31,8 +29,13 @@ import {
   processWolfKillActions,
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
-import { evaluateNightResolution } from './nightResolution.js';
-import { evaluateDayResolution } from './dayResolution.js';
+import {
+  buildNightContext,
+  buildNightResolutionContext,
+  buildDayContext,
+  buildDayResolutionContext,
+  buildHunterShotContext,
+} from './phaseContext.js';
 import { evaluateWinCondition, buildWinLines } from './winConditions.js';
 import type { WinResult } from './winConditions.js';
 import {
@@ -229,35 +232,27 @@ export async function advanceToNightAndDmNightActions(gameId: string): Promise<v
  */
 export async function maybeResolveNight(gameId: string): Promise<void> {
   try {
-    const game = await getGame(gameId);
-    if (!game || game.status !== 'night') {
-      return;
-    }
-
-    const nightNumber = game.current_night || 1;
-    const hasWolfExtraKill = (game.wolf_extra_kills_next_night ?? 0) > 0;
+    const nightCtx = await buildNightContext(gameId);
+    if (!nightCtx) return;
 
     // --- 1. Check if all night actions are in ---
-    const players = await getPlayersForGame(gameId);
-    const allActions = await getNightActionsForNight(gameId, nightNumber);
-    const actionsRound1 = allActions.filter((a) => a.round === 1);
-    const actionsRound2 = allActions.filter((a) => a.round === 2);
-
-    const nightResolution = evaluateNightResolution(players, actionsRound1, nightNumber);
-    if (nightResolution.state === 'pending') {
+    const resolutionCheck = buildNightResolutionContext(nightCtx);
+    if (resolutionCheck.state === 'pending') {
       return;
     }
+    const { ctx: readyCtx } = resolutionCheck;
+    const game = readyCtx.game;
 
     // On Wolf Cub bonus nights, once all first-round actions are in, open a
     // second-round wolf vote before resolving the night. Only do this once,
     // and only if there is at least one alive wolf-pack member.
-    if (hasWolfExtraKill && actionsRound2.length === 0) {
-      const aliveWolves = players.filter(
+    if (readyCtx.hasWolfExtraKill && readyCtx.actionsRound2.length === 0) {
+      const aliveWolves = readyCtx.playersBefore.filter(
         (p) => p.is_alive && WOLF_PACK_ROLES.has(p.role as RoleName),
       );
       if (aliveWolves.length > 0) {
-        await dmWolfExtraKillPrompts({ game, players });
-        await scheduleNightTimeout(gameId, nightNumber, true);
+        await dmWolfExtraKillPrompts({ game, players: readyCtx.playersBefore });
+        await scheduleNightTimeout(gameId, readyCtx.nightNumber, true);
         return;
       }
     }
@@ -268,24 +263,15 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
     const claimed = await advancePhase(gameId, 'night');
     if (!claimed) return;
 
-    const { killTargets: killTargetsRound1, protectTargets, visitActions } = nightResolution;
-
-    const killTargetsRound2 = hasWolfExtraKill
-      ? actionsRound2
-          .filter(
-            (a) =>
-              a.action_kind === 'kill' &&
-              a.target_id &&
-              WOLF_PACK_ROLES.has(a.role as RoleName),
-          )
-          .map((a) => a.target_id as string)
-      : [];
-
     // --- 2. Seer inspections (DM only, no kills yet) ---
-    await processSeerActions(players, actionsRound1);
+    await processSeerActions(readyCtx.playersBefore, readyCtx.actionsRound1);
 
     // --- 2b. Thief role swap (night 1 only) ---
-    const { thiefActed } = await processThiefActions(gameId, players, actionsRound1);
+    const { thiefActed } = await processThiefActions(
+      gameId,
+      readyCtx.playersBefore,
+      readyCtx.actionsRound1,
+    );
 
     // --- 3–7. Apply all killing night actions and refresh player state ---
     const {
@@ -297,13 +283,13 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       cultConverted,
     } = await resolveNightActionsAndCollectDeaths({
       gameId,
-      nightNumber,
-      players,
-      actions: allActions,
-      killTargetsRound1,
-      killTargetsRound2,
-      protectTargets,
-      visitActions,
+      nightNumber: readyCtx.nightNumber,
+      players: readyCtx.playersBefore,
+      actions: readyCtx.allActions,
+      killTargetsRound1: readyCtx.killTargetsRound1,
+      killTargetsRound2: readyCtx.killTargetsRound2,
+      protectTargets: readyCtx.protectTargets,
+      visitActions: readyCtx.visitActions,
     });
 
     // Apply Lover sorrow deaths after all primary night kills have resolved.
@@ -329,9 +315,9 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
 
     // If the Wolf Cub transitioned from alive -> dead over the course of the night,
     // notify the pack and grant the extra kill bonus for the following night.
-    await maybeNotifyWolfCubDeathFromTransition(gameId, players, updatedPlayers);
+    await maybeNotifyWolfCubDeathFromTransition(gameId, readyCtx.playersBefore, updatedPlayers);
 
-    if (hasWolfExtraKill) {
+    if (readyCtx.hasWolfExtraKill) {
       await clearWolfExtraKillsForNextNight(gameId);
     }
 
@@ -364,20 +350,25 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
         if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
         await safePostToChannel(game.channel_id, lines, 'dawn message');
       }
-      await triggerHunterShot({ game, hunterId: killedHunter.user_id, continuation: `day:${upcomingDay}`, alivePlayers });
+      await triggerHunterShot({
+        game,
+        hunterId: killedHunter.user_id,
+        continuation: `day:${upcomingDay}`,
+        alivePlayers,
+      });
       return;
     }
 
     // --- 9. Dawn announcement ---
     const win = evaluateWinCondition(postTraitorPlayers);
 
-      if (game.channel_id) {
-        const lines: string[] = buildNightSummaryLines(
-          nightDeaths,
-          postTraitorPlayers,
-          doctorSavedSomeone,
-          cultConverted,
-        );
+    if (game.channel_id) {
+      const lines: string[] = buildNightSummaryLines(
+        nightDeaths,
+        postTraitorPlayers,
+        doctorSavedSomeone,
+        cultConverted,
+      );
       if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());
       if (thiefActed) lines.push(thiefStoleLine());
 
@@ -866,27 +857,12 @@ export async function maybeResolveDay(
   { force = false }: { force?: boolean } = {},
 ): Promise<void> {
   try {
-    const game = await getGame(gameId);
-    if (!game || (game.status !== 'day' && game.status !== 'day_second_lynch')) {
-      return;
-    }
-
-    const dayNumber = game.current_day || 1;
-    // A double-lynch day's first round uses 'day'; the second round uses 'day_second_lynch'.
-    const isSecondLynch = game.status === 'day_second_lynch';
-    const isFirstLynchOfDouble =
-      !isSecondLynch &&
-      game.troublemaker_double_lynch_day != null &&
-      game.troublemaker_double_lynch_day === dayNumber;
-
-    const round = isSecondLynch ? 2 : 1;
+    const baseCtx = await buildDayContext(gameId);
+    if (!baseCtx) return;
 
     // --- 1. Check if a lynch verdict has been reached ---
-    const players = await getPlayersForGame(gameId);
-    const votes = await getVotesForDay(gameId, dayNumber, round);
-
-    const resolution = evaluateDayResolution(players, votes, { force });
-    if (resolution.state === 'pending') {
+    const dayCtx = buildDayResolutionContext(baseCtx, { force });
+    if (dayCtx.resolutionKind === 'pending') {
       return;
     }
 
@@ -895,36 +871,36 @@ export async function maybeResolveDay(
     // regardless of whether the first round produced a lynch or no-lynch.
     // Everything else (normal day, second lynch): advance to 'night'.
     let claimed: boolean;
-    if (isFirstLynchOfDouble) {
+    if (dayCtx.isFirstLynchOfDouble) {
       claimed = await beginSecondLynchPhase(gameId);
     } else {
-      claimed = (await advancePhase(gameId, game.status)) !== null;
+      claimed = (await advancePhase(gameId, dayCtx.game.status)) !== null;
     }
     if (!claimed) return;
 
     // Disable stale vote DMs so players can't vote after the phase ends.
-    disableDayVotePrompts(gameId, dayNumber).catch((err) =>
+    disableDayVotePrompts(gameId, dayCtx.dayNumber).catch((err) =>
       console.error('Failed to disable day vote prompts', err),
     );
 
     // --- 2. No-lynch result ---
-    if (resolution.state === 'no_lynch') {
-      if (isFirstLynchOfDouble) {
+    if (dayCtx.resolutionKind === 'no_lynch') {
+      if (dayCtx.isFirstLynchOfDouble) {
         // First round on a TroubleMaker double-lynch day: no one is lynched,
         // but the village still gets a second voting round instead of going to night.
         await safePostToChannel(
-          game.channel_id,
-          [buildNoLynchLine(dayNumber)],
+          dayCtx.game.channel_id,
+          [buildNoLynchLine(dayCtx.dayNumber)],
           'no-lynch first lynch on double-lynch day',
         );
-        scheduleDayVoting(gameId, dayNumber, true);
-        scheduleDayTimeout(gameId, dayNumber, true);
+        scheduleDayVoting(gameId, dayCtx.dayNumber, true);
+        scheduleDayTimeout(gameId, dayCtx.dayNumber, true);
         return;
       } else {
         // Normal day or second lynch round: no-lynch falls through to night.
         await safePostToChannel(
-          game.channel_id,
-          [buildNoLynchLine(dayNumber), buildNightFallsLine()],
+          dayCtx.game.channel_id,
+          [buildNoLynchLine(dayCtx.dayNumber), buildNightFallsLine()],
           'no-lynch day resolution message',
         );
         await dmNightAndSchedule(gameId);
@@ -933,8 +909,8 @@ export async function maybeResolveDay(
     }
 
     // --- 3. Apply lynch ---
-    const lynchId = resolution.lynchId;
-    const lynched = players.find((p) => p.user_id === lynchId);
+    const lynchId = dayCtx.lynchId!;
+    const lynched = dayCtx.playersBefore.find((p) => p.user_id === lynchId);
     if (!lynched || !lynched.is_alive) {
       return;
     }
@@ -946,7 +922,7 @@ export async function maybeResolveDay(
     // sole winner; town and wolves both lose.
     if (isTannerLynchWin(lynched, updatedPlayers)) {
       const lines = [lynchResultLine(lynched), ...tannerLynchLines()];
-      await safePostToChannel(game.channel_id, lines, 'Tanner win message');
+      await safePostToChannel(dayCtx.game.channel_id, lines, 'Tanner win message');
       await endGame(gameId);
       return;
     }
@@ -959,7 +935,7 @@ export async function maybeResolveDay(
 
     // If the Wolf Cub transitioned from alive -> dead over the course of the day
     // (lynch and any Lover sorrow), notify the pack and grant the bonus.
-    await maybeNotifyWolfCubDeathFromTransition(gameId, players, updatedPlayers);
+    await maybeNotifyWolfCubDeathFromTransition(gameId, dayCtx.playersBefore, updatedPlayers);
 
     // --- 4. Hunter reactive shot ---
     if (lynched.role === 'hunter') {
@@ -967,9 +943,9 @@ export async function maybeResolveDay(
       if (daySorrowVictim) lines.push(formatSorrowDeathLine(daySorrowVictim, daySorrowPartnerId));
       lines.push(hunterTriggerLine(), hunterResolveLine());
       // On the first lynch of a double-lynch day, the second vote must still happen after the shot.
-      const continuation = isFirstLynchOfDouble ? `day_second_lynch:${dayNumber}` : 'night';
+      const continuation = dayCtx.isFirstLynchOfDouble ? `day_second_lynch:${dayCtx.dayNumber}` : 'night';
       await announceAndTriggerLynchedHunterShot(
-        game, lynchId, updatedPlayers.filter((p) => p.is_alive), lines, continuation,
+        dayCtx.game, lynchId, updatedPlayers.filter((p) => p.is_alive), lines, continuation,
       );
       return;
     }
@@ -984,20 +960,20 @@ export async function maybeResolveDay(
     if (win) {
       const winLines = await buildWinLinesWithLovers(gameId, playersAfterTraitor, win);
       lines.push(...winLines, ...finalRolesLines(playersAfterTraitor));
-    } else if (!isFirstLynchOfDouble) {
+    } else if (!dayCtx.isFirstLynchOfDouble) {
       lines.push(buildNightFallsLine());
     }
-    await safePostToChannel(game.channel_id, lines, 'day resolution message');
+    await safePostToChannel(dayCtx.game.channel_id, lines, 'day resolution message');
 
     if (win) {
       await endGame(gameId);
       return;
     }
 
-    if (isFirstLynchOfDouble) {
+    if (dayCtx.isFirstLynchOfDouble) {
       // --- 6a. Open second vote ---
-      scheduleDayVoting(gameId, dayNumber, true);
-      scheduleDayTimeout(gameId, dayNumber, true);
+      scheduleDayVoting(gameId, dayCtx.dayNumber, true);
+      scheduleDayTimeout(gameId, dayCtx.dayNumber, true);
       return;
     }
 
@@ -1015,21 +991,19 @@ export async function maybeResolveDay(
  */
 export async function resolveHunterShot(gameId: string, hunterId: string, targetId: string | null): Promise<void> {
   try {
-    // Read the pending shot first to get the continuation
-    const shot = await getPendingHunterShot(gameId, hunterId);
-    if (!shot) return; // already resolved or doesn't exist
+    const shotCtx = await buildHunterShotContext(gameId, hunterId, targetId);
+    if (!shotCtx) return; // already resolved or doesn't exist
 
     // Atomically mark as resolved (prevent concurrent double-resolution from timeout + user submit)
     const claimed = await resolveHunterShotRecord(gameId, hunterId, targetId);
     if (!claimed) return;
 
-    const playersBeforeShot = await getPlayersForGame(gameId);
+    const { game, playersBefore, shot } = shotCtx;
 
     if (targetId) {
       await markPlayerDead(gameId, targetId);
     }
 
-    const game = await getGame(gameId);
     const updatedPlayers = await getPlayersForGame(gameId);
 
     const { sorrowVictimId: hunterSorrowVictimId, partnerId: hunterSorrowPartnerId } =
@@ -1040,7 +1014,7 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
 
     // If the Wolf Cub transitioned from alive -> dead due to the shot and/or Lover sorrow,
     // notify the pack and grant the extra kill bonus.
-    await maybeNotifyWolfCubDeathFromTransition(gameId, playersBeforeShot, updatedPlayers);
+    await maybeNotifyWolfCubDeathFromTransition(gameId, playersBefore, updatedPlayers);
 
     // After the shot and any Lover sorrow, allow a Traitor to awaken as a wolf
     // if the shot killed the last existing wolf.

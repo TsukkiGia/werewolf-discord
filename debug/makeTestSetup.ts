@@ -21,10 +21,10 @@ import type { RoleName } from '../game/types.js';
 export function makeTestSetup(playerCount: number, role: RoleName): RoleName[] {
   const WOLF_PACK = new Set<RoleName>(['werewolf', 'wolf_cub', 'alpha_wolf']);
 
-  if (WOLF_PACK.has(role)) {
-    // The desired role is already a wolf — put it first, fill with villagers.
-    return [role, ...Array(playerCount - 1).fill('villager')] as RoleName[];
-  }
+  // if (WOLF_PACK.has(role)) {
+  //   // The desired role is already a wolf — put it first, fill with villagers.
+  //   return [role, ...Array(playerCount - 1).fill('villager')] as RoleName[];
+  // }
 
   // Non-wolf role: slot 0 = werewolf, slot 1 = desired role, rest = villagers.
   if (playerCount < 2) {

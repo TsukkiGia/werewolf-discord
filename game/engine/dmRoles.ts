@@ -538,8 +538,9 @@ export async function startDayVoting(params: {
   game: GameRow;
   players: GamePlayerState[];
   dayNumber: number;
+  secondRound?: boolean;
 }): Promise<void> {
-  const { game, players, dayNumber } = params;
+  const { game, players, dayNumber, secondRound = false } = params;
 
   await dmDayVotePrompts({ game, players });
 
@@ -548,8 +549,11 @@ export async function startDayVoting(params: {
   }
 
   try {
+    const message = secondRound
+      ? `A second lynch for Day ${dayNumber} begins now. Check your DMs to cast your vote again.`
+      : `Voting for Day ${dayNumber} begins now. Check your DMs to cast your vote.`;
     await postChannelMessage(game.channel_id, {
-      content: `Voting for Day ${dayNumber} begins now. Check your DMs to cast your vote.`,
+      content: message,
     });
   } catch (err) {
     console.error('Failed to send day voting start message', err);

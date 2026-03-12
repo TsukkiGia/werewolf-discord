@@ -334,6 +334,8 @@ A unique partial index on `(channel_id, guild_id) WHERE status <> 'ended'` enfor
 
 **Atomic phase transitions.** `advancePhase()` uses a SQL `WHERE status = X` guard so concurrent timeout and manual resolution calls safely abort rather than double-transition.
 
+**Phase contexts (`NightContext` / `DayContext`).** Night and day resolution are driven by explicit phase context objects that bundle the current `game`, player snapshot, actions or votes, and phase flags (e.g., Wolf Cub bonus, TroubleMaker double‑lynch state). The orchestrator builds these contexts once per phase and passes them through the resolution pipeline, which reduces repeated DB reads, keeps complex rules in one place, and simplifies testing.
+
 ---
 
 ## Prerequisites

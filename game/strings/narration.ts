@@ -46,9 +46,9 @@ export function nightFallsLine(): string {
 
 export function noLynchLine(dayNumber: number): string {
   const variants = [
-    `Day ${dayNumber} ends with no majority. No one is lynched.`,
-    `Day ${dayNumber} is over. No one receives enough votes to be lynched.`,
-    `Day ${dayNumber} ends in a stalemate. No one is lynched.`,
+    `The Day ${dayNumber} vote ends with no majority. No one is lynched.`,
+    `The Day ${dayNumber} vote is over. No one receives enough votes to be lynched.`,
+    `The Day ${dayNumber} vote ends in a stalemate. No one is lynched.`,
   ];
   return pickRandom(variants);
 }

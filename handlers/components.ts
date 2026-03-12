@@ -375,7 +375,7 @@ export async function handleTroublemakerDoubleLynch(
     try {
       await postChannelMessage(game.channel_id, {
         content:
-          'The village erupts into chaos. The anger runs high — today there will be **two lynches**.',
+          'The TroubleMaker’s mischief takes hold. The village erupts into chaos — today there will be **two lynches**.',
       });
     } catch (err) {
       console.error('Failed to announce TroubleMaker double lynch', err);

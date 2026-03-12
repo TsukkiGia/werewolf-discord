@@ -12,8 +12,9 @@ export async function scheduleDayVoting(
   secondRound = false,
 ): Promise<void> {
   const keySuffix = secondRound ? '-second' : '';
+  const delaySeconds = secondRound ? 0 : 30;
   await boss.send('day-voting', { gameId, dayNumber, secondRound }, {
-    startAfter: 30,
+    startAfter: delaySeconds,
     singletonKey: `${gameId}-day-${dayNumber}${keySuffix}`,
   });
 }
@@ -31,6 +32,6 @@ export async function registerWorkers(): Promise<void> {
     if ((game.current_day || 0) !== dayNumber) return;
 
     const players = await getPlayersForGame(gameId);
-    await startDayVoting({ game, players, dayNumber });
+    await startDayVoting({ game, players, dayNumber, secondRound: !!secondRound });
   });
 }
