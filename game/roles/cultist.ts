@@ -4,7 +4,7 @@ export const CultistRole: RoleDefinition = {
   name: 'cultist',
   alignment: 'cult',
   description:
-    'Every other night, cultists vote together to convert one player to the cult. ' +
+    'Each night, cultists vote together to convert one player to the cult. ' +
     'That player loses their old role and becomes a cultist. ' +
     'Wolves are immune to conversion. ' +
     'If the cult targets the Cult Hunter, their newest member dies instead. ' +
@@ -17,7 +17,6 @@ export const CultistRole: RoleDefinition = {
     canTargetSelf: false,
     prompt: 'Night {night}: vote with your cult — choose a player to convert.',
   },
-  isNightActionRequired: ({ nightNumber }) => nightNumber % 2 === 1,
   buildRoleIntro: ({ assignment, allAssignments }: RoleIntroContext): string => {
     const cultmates = allAssignments
       .filter((a) => a.alignment === 'cult' && a.userId !== assignment.userId)
@@ -30,8 +29,8 @@ export const CultistRole: RoleDefinition = {
 
     return (
       `Your role for this Werewolf game is: **cultist**.\n` +
-      'You are a CULTIST. Every other night (nights 1, 3, 5…) your cult votes together ' +
-      'to convert one player. They lose their old role and join the cult. ' +
+      'You are a CULTIST. Every night your cult votes together to convert one player. ' +
+      'They lose their old role and join the cult. ' +
       'Wolves cannot be converted. If you target the Cult Hunter, your newest member dies instead. ' +
       'You win when every living player is a cultist.\n' +
       cultmatesLine

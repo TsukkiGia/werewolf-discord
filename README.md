@@ -294,7 +294,7 @@ A unique partial index on `(channel_id, guild_id) WHERE status <> 'ended'` enfor
 - Doctor cannot save either side from a Chemist duel.
 
 **Cult vs Cult Hunter vs monsters.**
-- Every other night the cult votes on a single conversion target:
+- Every night the cult votes on a single conversion target:
   - **Normal target** (town / neutral non‑immune): loses their old role and becomes a cultist; cult DMs announce the new member.
   - **Cult Hunter**: conversion backfires; the newest cult member dies instead, and the Hunter gets a special “you were targeted” DM.
   - **Wolf‑aligned or Serial Killer**: conversion fails and kills the converting cultist; the dying cultist and surviving cultists get distinct DMs explaining that the target is beyond their reach.
