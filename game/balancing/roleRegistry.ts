@@ -17,6 +17,7 @@ import { CupidRole } from '../roles/cupid.js';
 import { TannerRole } from '../roles/tanner.js';
 import { TraitorRole } from '../roles/traitor.js';
 import { ThiefRole } from '../roles/thief.js';
+import { TroubleMakerRole } from '../roles/troublemaker.js';
 import type { RoleName } from '../types.js';
 
 export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
@@ -38,6 +39,7 @@ export const ROLE_REGISTRY: Record<RoleName, RoleDefinition> = {
   traitor: TraitorRole,
   tanner: TannerRole,
   thief: ThiefRole,
+  troublemaker: TroubleMakerRole,
 };
 
 export function isRoleName(value: unknown): value is RoleName {

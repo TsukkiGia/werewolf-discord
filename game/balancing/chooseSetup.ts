@@ -25,6 +25,7 @@ const TOWN_POWER: { role: RoleName; strength: number }[] = [
   { role: 'chemist', strength: 1.25 },
   { role: 'cupid', strength: 0.75 },
   { role: 'thief', strength: 1.25 },
+  { role: 'troublemaker', strength: 0.75 },
 ];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

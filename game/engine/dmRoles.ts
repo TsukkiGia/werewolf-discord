@@ -335,28 +335,48 @@ export async function dmDayVotePrompts(params: {
         continue;
       }
 
+      const components: unknown[] = [
+        {
+          type: MessageComponentTypes.TEXT_DISPLAY,
+          content:
+            'It is day. Choose a player to lynch from the list below.',
+        },
+        {
+          type: MessageComponentTypes.ACTION_ROW,
+          components: [
+            {
+              type: MessageComponentTypes.STRING_SELECT,
+              custom_id: `day_vote:${game.id}`,
+              placeholder: 'Choose a player to lynch',
+              min_values: 1,
+              max_values: 1,
+              options,
+            },
+          ],
+        },
+      ];
+
+      const isTroublemaker =
+        isRoleName(player.role) && ROLE_REGISTRY[player.role].name === 'troublemaker';
+      const abilityUnused = game.troublemaker_double_lynch_day == null;
+
+      if (isTroublemaker && abilityUnused) {
+        components.push({
+          type: MessageComponentTypes.ACTION_ROW,
+          components: [
+            {
+              type: MessageComponentTypes.BUTTON,
+              custom_id: `troublemaker_double_lynch:${game.id}:${game.current_day || 1}`,
+              style: 2,
+              label: 'Make trouble (double lynch today)',
+            },
+          ],
+        });
+      }
+
       const msgRes = await postChannelMessage(dmChannelId, {
         flags: InteractionResponseFlags.IS_COMPONENTS_V2,
-        components: [
-          {
-            type: MessageComponentTypes.TEXT_DISPLAY,
-            content:
-              'It is day. Choose a player to lynch from the list below.',
-          },
-          {
-            type: MessageComponentTypes.ACTION_ROW,
-            components: [
-              {
-                type: MessageComponentTypes.STRING_SELECT,
-                custom_id: `day_vote:${game.id}`,
-                placeholder: 'Choose a player to lynch',
-                min_values: 1,
-                max_values: 1,
-                options,
-              },
-            ],
-          },
-        ],
+        components,
       });
 
       const msg = (await msgRes.json()) as { id?: string };

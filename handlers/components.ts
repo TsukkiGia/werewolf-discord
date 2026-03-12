@@ -12,6 +12,7 @@ import {
   hasNightAction,
   hasDayVote,
   recordLovers,
+  setTroublemakerDoubleLynchDay,
 } from '../db.js';
 import { postChannelMessage, sendDmMessage } from '../utils.js';
 import { ROLE_REGISTRY, isRoleName } from '../game/balancing/roleRegistry.js';
@@ -278,6 +279,111 @@ export async function handleCupidSecondPick(req: Request, res: Response, compone
   })();
 
   void maybeResolveNight(gameId);
+}
+
+export async function handleTroublemakerDoubleLynch(
+  req: Request,
+  res: Response,
+  componentId: string,
+): Promise<void> {
+  const withoutPrefix = componentId.replace('troublemaker_double_lynch:', '');
+  const [gameId, dayStr] = withoutPrefix.split(':');
+  const requestedDay = Number(dayStr);
+
+  const game = await getGame(gameId);
+  if (!game || game.status !== 'day') {
+    return res.status(400).json({ error: 'no active day for this game' });
+  }
+
+  const currentDay = game.current_day || 1;
+  if (requestedDay !== currentDay) {
+    return res.send({
+      type: InteractionResponseType.UPDATE_MESSAGE,
+      data: {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: [
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content: 'This troublemaking button is from a previous day and cannot be used.',
+          },
+        ],
+      },
+    });
+  }
+
+  const actorId = getInteractionUserId(req);
+  if (!actorId) {
+    return res.status(400).json({ error: 'missing user id' });
+  }
+
+  const players = await getPlayersForGame(gameId);
+  const actor = players.find((p) => p.user_id === actorId);
+
+  if (!actor || !actor.is_alive || actor.role !== 'troublemaker') {
+    return res.send({
+      type: InteractionResponseType.CHANNEL_MESSAGE_WITH_SOURCE,
+      data: {
+        flags: InteractionResponseFlags.EPHEMERAL,
+        content: 'You are not the TroubleMaker in this game.',
+      },
+    });
+  }
+
+  if (game.troublemaker_double_lynch_day != null) {
+    return res.send({
+      type: InteractionResponseType.UPDATE_MESSAGE,
+      data: {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: [
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content: 'You have already made trouble earlier this game. You can only do this once.',
+          },
+        ],
+      },
+    });
+  }
+
+  const set = await setTroublemakerDoubleLynchDay(gameId, currentDay);
+  if (!set) {
+    return res.send({
+      type: InteractionResponseType.UPDATE_MESSAGE,
+      data: {
+        flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+        components: [
+          {
+            type: MessageComponentTypes.TEXT_DISPLAY,
+            content: 'Someone else has already made trouble this game.',
+          },
+        ],
+      },
+    });
+  }
+
+  await res.send({
+    type: InteractionResponseType.UPDATE_MESSAGE,
+    data: {
+      flags: InteractionResponseFlags.IS_COMPONENTS_V2,
+      components: [
+        {
+          type: MessageComponentTypes.TEXT_DISPLAY,
+          content:
+            'You kick over the hornet’s nest. The village is in an uproar — they will attempt **two lynches** today.',
+        },
+      ],
+    },
+  });
+
+  if (game.channel_id) {
+    try {
+      await postChannelMessage(game.channel_id, {
+        content:
+          'The village erupts into chaos. The anger runs high — today there will be **two lynches**.',
+      });
+    } catch (err) {
+      console.error('Failed to announce TroubleMaker double lynch', err);
+    }
+  }
 }
 
 export async function handleNightAction(req: Request, res: Response, componentId: string) {

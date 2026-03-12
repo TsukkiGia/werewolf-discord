@@ -27,7 +27,7 @@ import {
 } from './nightActionProcessors.js';
 import { postChannelMessage, openDmChannel } from '../../utils.js';
 import { chooseKillVictim, evaluateNightResolution } from './nightResolution.js';
-import { evaluateDayResolution } from './dayResolution.js';
+import { evaluateDayResolution, chooseLynchVictim } from './dayResolution.js';
 import { evaluateWinCondition, buildWinLines } from './winConditions.js';
 import type { WinResult } from './winConditions.js';
 import {
@@ -830,6 +830,9 @@ export async function maybeResolveDay(
     }
 
     const dayNumber = game.current_day || 1;
+    const isDoubleLynchDay =
+      game.troublemaker_double_lynch_day != null &&
+      game.troublemaker_double_lynch_day === dayNumber;
 
     // --- 1. Check if a lynch verdict has been reached ---
     const players = await getPlayersForGame(gameId);
@@ -901,6 +904,115 @@ export async function maybeResolveDay(
       ? updatedPlayers.find((p) => p.user_id === daySorrowVictimId) ?? null
       : null;
 
+    let secondLynch: GamePlayerState | null = null;
+    let extraSorrowVictim: GamePlayerState | null = null;
+    let extraSorrowPartnerId: string | null = null;
+
+    if (isDoubleLynchDay) {
+      const secondLynchId = chooseLynchVictim(updatedPlayers, votes);
+      if (secondLynchId) {
+        const second = updatedPlayers.find(
+          (p) => p.user_id === secondLynchId && p.is_alive,
+        );
+        if (second) {
+          await markPlayerDead(gameId, secondLynchId);
+          const afterSecond = await getPlayersForGame(gameId);
+
+          const {
+            sorrowVictimId: extraSorrowId,
+            partnerId: extraPartnerId,
+          } = await applyLoverSorrowDeaths(gameId, afterSecond);
+          if (extraSorrowId) {
+            extraSorrowVictim =
+              afterSecond.find((p) => p.user_id === extraSorrowId) ?? null;
+            extraSorrowPartnerId = extraPartnerId ?? null;
+          }
+
+          if (second.role === 'wolf_cub') {
+            const packMates = afterSecond.filter(
+              (p) =>
+                p.is_alive &&
+                WOLF_PACK_ROLES.has(p.role as RoleName) &&
+                p.user_id !== secondLynchId,
+            );
+            await Promise.all(
+              packMates.map(async (wolf) => {
+                try {
+                  const dmChannelId = await openDmChannel(wolf.user_id);
+                  await postChannelMessage(dmChannelId, {
+                    content: wolfCubDeathPackLine(secondLynchId),
+                  });
+                } catch (err) {
+                  console.error(
+                    'Failed to DM wolf pack about Wolf Cub lynch (second lynch)',
+                    gameId,
+                    wolf.user_id,
+                    err,
+                  );
+                }
+              }),
+            );
+            await incrementWolfExtraKillsForNextNight(gameId);
+          }
+
+          if (second.role === 'hunter') {
+            const aliveAfterSecond = afterSecond.filter((p) => p.is_alive);
+            if (game.channel_id) {
+              const lines: string[] = [lynchResultLine(lynched)];
+
+              if (daySorrowVictim) {
+                lines.push(
+                  loverSorrowDeathLine(
+                    daySorrowVictim.user_id,
+                    daySorrowPartnerId ?? undefined,
+                  ) +
+                    ` They were ${deathSummary(
+                      daySorrowVictim.alignment,
+                      daySorrowVictim.role,
+                    )}.`,
+                );
+              }
+
+              lines.push(lynchResultLine(second));
+
+              if (extraSorrowVictim) {
+                lines.push(
+                  loverSorrowDeathLine(
+                    extraSorrowVictim.user_id,
+                    extraSorrowPartnerId ?? undefined,
+                  ) +
+                    ` They were ${deathSummary(
+                      extraSorrowVictim.alignment,
+                      extraSorrowVictim.role,
+                    )}.`,
+                );
+              }
+
+              lines.push(hunterResolveLine());
+
+              try {
+                await postChannelMessage(game.channel_id, {
+                  content: lines.join('\n'),
+                });
+              } catch (err) {
+                console.error('Failed to send double-lynch hunter message', err);
+              }
+            }
+
+            await triggerHunterShot({
+              game,
+              hunterId: secondLynchId,
+              continuation: 'night',
+              alivePlayers: aliveAfterSecond,
+            });
+            return;
+          }
+
+          secondLynch = second;
+        }
+      }
+    }
+
     // If the Wolf Cub was lynched, DM surviving pack members and flag extra kill.
     if (lynched.role === 'wolf_cub') {
       const packMates = updatedPlayers.filter(
@@ -947,8 +1059,31 @@ export async function maybeResolveDay(
 
       if (daySorrowVictim) {
         lines.push(
-          loverSorrowDeathLine(daySorrowVictim.user_id, daySorrowPartnerId ?? undefined) +
-            ` They were ${deathSummary(daySorrowVictim.alignment, daySorrowVictim.role)}.`,
+          loverSorrowDeathLine(
+            daySorrowVictim.user_id,
+            daySorrowPartnerId ?? undefined,
+          ) +
+            ` They were ${deathSummary(
+              daySorrowVictim.alignment,
+              daySorrowVictim.role,
+            )}.`,
+        );
+      }
+
+      if (secondLynch) {
+        lines.push(lynchResultLine(secondLynch));
+      }
+
+      if (extraSorrowVictim) {
+        lines.push(
+          loverSorrowDeathLine(
+            extraSorrowVictim.user_id,
+            extraSorrowPartnerId ?? undefined,
+          ) +
+            ` They were ${deathSummary(
+              extraSorrowVictim.alignment,
+              extraSorrowVictim.role,
+            )}.`,
         );
       }
 

@@ -15,6 +15,7 @@ export interface GameRow {
   current_night: number;
   join_message_id: string | null;
   wolf_extra_kills_next_night: number;
+  troublemaker_double_lynch_day: number | null;
 }
 
 export async function createGame(params: {
@@ -103,6 +104,21 @@ export async function clearWolfExtraKillsForNextNight(gameId: string): Promise<v
     `,
     [gameId],
   );
+}
+
+export async function setTroublemakerDoubleLynchDay(
+  gameId: string,
+  day: number,
+): Promise<boolean> {
+  const result = await pool.query(
+    `
+    UPDATE games
+    SET troublemaker_double_lynch_day = $1
+    WHERE id = $2 AND troublemaker_double_lynch_day IS NULL
+    `,
+    [day, gameId],
+  );
+  return (result.rowCount ?? 0) > 0;
 }
 
 export async function endGame(gameId: string): Promise<void> {

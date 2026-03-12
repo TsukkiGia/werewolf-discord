@@ -22,6 +22,7 @@ import {
   handleHunterShot,
   handleCupidFirstPick,
   handleCupidSecondPick,
+  handleTroublemakerDoubleLynch,
 } from './handlers/components.js';
 
 // Ensure database schema exists before handling traffic
@@ -73,6 +74,9 @@ app.post(
       if (componentId.startsWith('hunter_shot:')) return handleHunterShot(req, res, componentId);
       if (componentId.startsWith('cupid_link1:')) return handleCupidFirstPick(req, res, componentId);
       if (componentId.startsWith('cupid_link2:')) return handleCupidSecondPick(req, res, componentId);
+      if (componentId.startsWith('troublemaker_double_lynch:')) {
+        return handleTroublemakerDoubleLynch(req, res, componentId);
+      }
 
       console.error(`unknown component: ${componentId}`);
       return res.status(400).json({ error: 'unknown component' });
