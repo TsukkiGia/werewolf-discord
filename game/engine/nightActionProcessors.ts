@@ -527,7 +527,6 @@ export async function processArsonistActions(
   if (action.target_id) {
     await addDousedTarget(gameId, action.target_id);
     await safeDm(arsonist.user_id, arsonistDousedTargetDmLine(action.target_id), "arsonist douse result");
-    await safeDm(action.target_id, arsonistDousedTargetVictimDmLine(), 'arsonist douse target result');
   }
 
   return { killedIds: [], burnedVictims: [] };
