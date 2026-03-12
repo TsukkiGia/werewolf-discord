@@ -13,6 +13,8 @@ import { getCultMemberIds, addCultMember } from '../../db/cult.js';
 import { recordDayVotePrompt, getDayVotePrompts } from '../../db/dayVotePrompts.js';
 import { logEvent } from '../../logging.js';
 
+const NIGHT_PASS_SENTINEL = '__NIGHT_PASS__';
+
 // Cache display names per user ID for the lifetime of the process so we don't
 // spam the Discord API (and hit rate limits) when building option lists.
 const displayNameCache = new Map<string, Promise<string>>();
@@ -180,6 +182,14 @@ async function dmNightPromptsCore(params: {
         options.unshift({
           label: '🔥 Ignite all doused houses',
           value: '__ARSONIST_IGNITE__',
+        });
+      }
+
+      // Allow players to explicitly take no action (same as timeout).
+      if (options.length > 0) {
+        options.unshift({
+          label: 'Do nothing tonight',
+          value: NIGHT_PASS_SENTINEL,
         });
       }
 

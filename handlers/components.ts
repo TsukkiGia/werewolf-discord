@@ -22,6 +22,8 @@ import { buildJoinClosedComponents } from './commands.js';
 import { logEvent } from '../logging.js';
 import type { Request, Response } from 'express';
 
+const NIGHT_PASS_SENTINEL = '__NIGHT_PASS__';
+
 // Track Cupid's first Lover selection between the first and second DM step.
 const cupidFirstPicks = new Map<string, string>(); // key: `${gameId}:${cupidId}` → first lover ID
 
@@ -424,12 +426,17 @@ export async function handleNightAction(req: Request, res: Response, componentId
   const def = ROLE_REGISTRY[role];
 
   const isIgnite = targetId === '__ARSONIST_IGNITE__';
+  const isPass = targetId === NIGHT_PASS_SENTINEL;
+
+  const finalTargetId = isIgnite || isPass ? null : targetId;
+  const finalActionKind = isIgnite ? 'ignite' : def.nightAction.kind;
+
   const inserted = await recordNightAction({
     gameId,
     night: nightNumber,
     actorId,
-    targetId: isIgnite ? null : targetId,
-    actionKind: isIgnite ? 'ignite' : def.nightAction.kind,
+    targetId: finalTargetId,
+    actionKind: finalActionKind,
     role: def.name,
   });
 
@@ -447,8 +454,8 @@ export async function handleNightAction(req: Request, res: Response, componentId
       night: nightNumber,
       actorId,
       role: def.name,
-      actionKind: def.nightAction.kind,
-      targetId,
+      actionKind: finalActionKind,
+      targetId: finalTargetId,
     });
   }
 
@@ -465,10 +472,18 @@ export async function handleNightAction(req: Request, res: Response, componentId
               ? 'link'
               : 'act on';
 
-  const confirmation =
-    targetId != null
-      ? `Your night action has been recorded: you chose to ${verb} <@${targetId}>.`
-      : 'Your night action has been recorded.';
+  let confirmation: string;
+  if (isPass) {
+    confirmation =
+      'Your choice to take no night action has been recorded.';
+  } else if (isIgnite) {
+    confirmation =
+      'Your choice to ignite all doused houses has been recorded.';
+  } else if (targetId != null) {
+    confirmation = `Your night action has been recorded: you chose to ${verb} <@${targetId}>.`;
+  } else {
+    confirmation = 'Your night action has been recorded.';
+  }
 
   await res.send({
     type: InteractionResponseType.UPDATE_MESSAGE,

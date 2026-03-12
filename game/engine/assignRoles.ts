@@ -21,8 +21,8 @@ export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
   if (playerIds.length === 0) return [];
 
   const shuffledPlayers = shuffle(playerIds);
-  const setup = chooseSetup(playerIds.length);
-  // const setup = makeTestSetup(playerIds.length, 'doctor');
+  // const setup = chooseSetup(playerIds.length);
+  const setup = makeTestSetup(playerIds.length, 'doctor');
 
   const assignments: AssignedRole[] = [];
 
