@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS night_actions (
   action_kind TEXT NOT NULL,
   role TEXT NOT NULL,
   created_at BIGINT NOT NULL,
-  UNIQUE (game_id, night, round, actor_id)
+  CONSTRAINT night_actions_game_night_round_actor
+    UNIQUE (game_id, night, round, actor_id)
 );
 
 -- Migration: add round column and update unique constraint for existing tables.
@@ -61,9 +62,18 @@ ALTER TABLE night_actions
   ADD COLUMN IF NOT EXISTS round INTEGER NOT NULL DEFAULT 1;
 ALTER TABLE night_actions
   DROP CONSTRAINT IF EXISTS night_actions_game_id_night_actor_id_key;
-ALTER TABLE night_actions
-  ADD CONSTRAINT night_actions_game_night_round_actor
-    UNIQUE (game_id, night, round, actor_id);
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'night_actions_game_night_round_actor'
+  ) THEN
+    ALTER TABLE night_actions
+      ADD CONSTRAINT night_actions_game_night_round_actor
+        UNIQUE (game_id, night, round, actor_id);
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS night_action_prompts (
   game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,

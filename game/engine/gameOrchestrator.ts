@@ -327,14 +327,9 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
       nightDeaths.push(sorrowDeath);
     }
 
-    // If the Wolf Cub died tonight, DM surviving pack members.
-    const wolfCubDeath = nightDeaths.find((d) => {
-      const victim = updatedPlayers.find((p) => p.user_id === d.playerId);
-      return victim?.role === 'wolf_cub';
-    });
-    if (wolfCubDeath) {
-      await notifyWolfCubPackDeath(gameId, wolfCubDeath.playerId, updatedPlayers);
-    }
+    // If the Wolf Cub transitioned from alive -> dead over the course of the night,
+    // notify the pack and grant the extra kill bonus for the following night.
+    await maybeNotifyWolfCubDeathFromTransition(gameId, players, updatedPlayers);
 
     if (hasWolfExtraKill) {
       await clearWolfExtraKillsForNextNight(gameId);
@@ -798,6 +793,26 @@ async function notifyWolfCubPackDeath(
   await incrementWolfExtraKillsForNextNight(gameId);
 }
 
+/**
+ * Compare two player snapshots and, if a previously alive Wolf Cub is now dead,
+ * notify surviving pack members and grant the extra kill bonus for the following night.
+ */
+async function maybeNotifyWolfCubDeathFromTransition(
+  gameId: string,
+  before: GamePlayerState[],
+  after: GamePlayerState[],
+): Promise<void> {
+  const cubBefore = before.find((p) => p.role === 'wolf_cub' && p.is_alive);
+  if (!cubBefore) return;
+
+  const cubStillAlive = after.some(
+    (p) => p.user_id === cubBefore.user_id && p.is_alive,
+  );
+  if (!cubStillAlive) {
+    await notifyWolfCubPackDeath(gameId, cubBefore.user_id, after);
+  }
+}
+
 /** Formats a lover sorrow death line with alignment reveal, used in lynch and hunter-shot narration. */
 function formatSorrowDeathLine(victim: GamePlayerState, partnerId: string | null | undefined): string {
   return (
@@ -927,12 +942,9 @@ export async function maybeResolveDay(
       ? updatedPlayers.find((p) => p.user_id === daySorrowVictimId) ?? null
       : null;
 
-    if (lynched.role === 'wolf_cub') {
-      await notifyWolfCubPackDeath(gameId, lynchId, updatedPlayers);
-    } else if (daySorrowVictim && daySorrowVictim.role === 'wolf_cub') {
-      // Wolf Cub died from Lover sorrow after a lynch — grant the extra kill bonus.
-      await notifyWolfCubPackDeath(gameId, daySorrowVictim.user_id, updatedPlayers);
-    }
+    // If the Wolf Cub transitioned from alive -> dead over the course of the day
+    // (lynch and any Lover sorrow), notify the pack and grant the bonus.
+    await maybeNotifyWolfCubDeathFromTransition(gameId, players, updatedPlayers);
 
     // --- 4. Hunter reactive shot ---
     if (lynched.role === 'hunter') {
@@ -996,6 +1008,8 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
     const claimed = await resolveHunterShotRecord(gameId, hunterId, targetId);
     if (!claimed) return;
 
+    const playersBeforeShot = await getPlayersForGame(gameId);
+
     if (targetId) {
       await markPlayerDead(gameId, targetId);
     }
@@ -1009,18 +1023,9 @@ export async function resolveHunterShot(gameId: string, hunterId: string, target
       ? updatedPlayers.find((p) => p.user_id === hunterSorrowVictimId) ?? null
       : null;
 
-    // If the Wolf Cub died from the Hunter's shot or from Lover sorrow as a result,
-    // grant the wolf-pack extra kill bonus for the following night.
-    if (targetId) {
-      const shotTarget = updatedPlayers.find((p) => p.user_id === targetId) ?? null;
-      if (shotTarget && shotTarget.role === 'wolf_cub') {
-        await notifyWolfCubPackDeath(gameId, shotTarget.user_id, updatedPlayers);
-      } else if (hunterSorrowVictim && hunterSorrowVictim.role === 'wolf_cub') {
-        await notifyWolfCubPackDeath(gameId, hunterSorrowVictim.user_id, updatedPlayers);
-      }
-    } else if (hunterSorrowVictim && hunterSorrowVictim.role === 'wolf_cub') {
-      await notifyWolfCubPackDeath(gameId, hunterSorrowVictim.user_id, updatedPlayers);
-    }
+    // If the Wolf Cub transitioned from alive -> dead due to the shot and/or Lover sorrow,
+    // notify the pack and grant the extra kill bonus.
+    await maybeNotifyWolfCubDeathFromTransition(gameId, playersBeforeShot, updatedPlayers);
 
     // After the shot and any Lover sorrow, allow a Traitor to awaken as a wolf
     // if the shot killed the last existing wolf.

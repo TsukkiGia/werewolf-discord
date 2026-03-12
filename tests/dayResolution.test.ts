@@ -18,6 +18,7 @@ function makeVote(partial: Partial<DayVoteRow>): DayVoteRow {
     id: 1,
     game_id: 'g',
     day: 1,
+    round: 1,
     voter_id: 'u',
     target_id: 'v',
     created_at: Date.now(),
