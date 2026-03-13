@@ -35,6 +35,7 @@
     "start": "npm run build && node dist/app.js",
     "register": "npm run build && node dist/commands.js",
     "dev": "nodemon --watch . --ext ts --ignore dist --ignore node_modules --exec \"npm run build && node dist/app.js\"",
-    "test": "vitest"
+    "test": "vitest",
+    "sim": "vitest run sim/simulate.test.ts"
   }
 }

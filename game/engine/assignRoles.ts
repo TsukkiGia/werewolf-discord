@@ -1,8 +1,6 @@
 import type { AssignedRole } from '../types.js';
 import { chooseSetup } from '../balancing/chooseSetup.js';
 import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
-import { makeTestSetup } from '../../debug/makeTestSetup.js';
-
 
 
 
@@ -21,8 +19,7 @@ export function assignRolesForPlayerIds(playerIds: string[]): AssignedRole[] {
   if (playerIds.length === 0) return [];
 
   const shuffledPlayers = shuffle(playerIds);
-  // const setup = chooseSetup(playerIds.length);
-  const setup = makeTestSetup(playerIds.length, 'thief', 'hunter');
+  const setup = chooseSetup(playerIds.length);
 
   const assignments: AssignedRole[] = [];
 

@@ -32,6 +32,13 @@ vi.mock('../db.js', () => ({
   getLovers: getLoversMock,
 }));
 
+// nightActionProcessors imports markPlayerDead directly from db/players.js,
+// so we need to mock that path too to capture kills.
+vi.mock('../db/players.js', () => ({
+  markPlayerDead: markPlayerDeadMock,
+  setPlayerRoleAndAlignment: vi.fn(),
+}));
+
 const sentMessages: { channelId: string; content: string }[] = [];
 
 const openDmChannelMock = vi.fn((userId: string) =>
@@ -135,9 +142,7 @@ describe('Serial Killer night actions', () => {
       makePlayer({ user_id: 'v', role: 'villager', alignment: 'town' }),
     ];
 
-    getPlayersForGameMock
-      .mockResolvedValueOnce(players)
-      .mockResolvedValueOnce(players);
+    getPlayersForGameMock.mockResolvedValue(players);
 
     const actions: NightActionRow[] = [
       makeAction({
@@ -187,9 +192,7 @@ describe('Serial Killer night actions', () => {
       makePlayer({ user_id: 'doc', role: 'doctor', alignment: 'town' }),
     ];
 
-    getPlayersForGameMock
-      .mockResolvedValueOnce(players)
-      .mockResolvedValueOnce(players);
+    getPlayersForGameMock.mockResolvedValue(players);
 
     const actions: NightActionRow[] = [
       // Serial Killer targets v

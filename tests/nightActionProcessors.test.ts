@@ -211,7 +211,7 @@ describe('processDoctorActions', () => {
     expect(res.doctorDeathInfo).toBeNull();
     expect(markPlayerDeadMock).not.toHaveBeenCalled();
 
-    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages).toHaveLength(2); // doctor + protected target
     expect(sentMessages[0]!.channelId).toBe('dm:doc');
     expect(sentMessages[0]!.content).toContain('wolves struck');
   });
@@ -244,7 +244,7 @@ describe('processDoctorActions', () => {
     expect(res.killedDoctorId).toBeNull();
     expect(markPlayerDeadMock).not.toHaveBeenCalled();
 
-    expect(sentMessages).toHaveLength(1);
+    expect(sentMessages).toHaveLength(2); // doctor + watched target
     expect(sentMessages[0]!.content).toContain('night passed quietly');
   });
 
@@ -371,8 +371,8 @@ describe('processHarlotActions', () => {
 
     expect(harlotVisitedWolfLineMock).toHaveBeenCalledWith('w');
 
-    // Only the harlot should get a DM on a lethal visit
-    expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h']);
+    // Harlot gets kill result DM; wolf also gets a DM about the fatal visit
+    expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h', 'dm:w']);
   });
 
   it("kills the harlot when visiting the wolves' chosen victim", async () => {
@@ -392,7 +392,8 @@ describe('processHarlotActions', () => {
     ]);
 
     expect(harlotVisitedTargetLineMock).toHaveBeenCalledWith('v');
-    expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h']);
+    // Harlot gets kill result DM; victim also gets a DM about the fatal visit to their home
+    expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h', 'dm:v']);
   });
 
   it('sends safe-visit DMs when visiting a non-wolf, non-victim', async () => {
@@ -435,7 +436,8 @@ describe('processHarlotActions', () => {
     ]);
 
     expect(harlotVisitedWolfLineMock).toHaveBeenCalledWith('w');
-    expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h']);
+    // Harlot gets kill result DM; wolf also gets a DM about the fatal visit
+    expect(sentMessages.map((m) => m.channelId)).toEqual(['dm:h', 'dm:w']);
   });
 });
 
@@ -528,10 +530,10 @@ describe('processChemistActions', () => {
     expect(res.duels).toEqual([]);
     expect(markPlayerDeadMock).not.toHaveBeenCalled();
 
-    // Chemist should get a DM explaining the target was out for the night.
+    // Chemist should get a DM explaining the target was unavailable.
     expect(sentMessages).toHaveLength(1);
     expect(sentMessages[0]!.channelId).toBe('dm:chem');
-    expect(sentMessages[0]!.content).toContain('out for the night');
+    expect(sentMessages[0]!.content).toContain('<@t>'); // target mention present in all variants
   });
 
   it('kills the chemist when the duel roll chooses them', async () => {

@@ -73,8 +73,8 @@ export function dawnIntroLine(): string {
 
 export function doctorSavedRumorLine(): string {
   const variants = [
-    'Rumor spreads that the wolves tried to kill someone, but the doctor protected them.',
-    'The villagers hear that a wolf attack was stopped by the doctor last night.',
+    'Rumor spreads that someone should have died in the night, but a doctor stepped in and pulled them back from the brink.',
+    'The villagers hear that a killer was stopped at the last moment — the doctor protected their target.',
     'People whisper that someone should be dead, but the doctor saved them.',
   ];
   return pickRandom(variants);
@@ -192,9 +192,9 @@ export function revealWolvesLine(wolfMentions: string): string {
 export function nightVictimLine(victim: GamePlayerState): string {
   const summary = deathSummary(victim.alignment as Alignment | null, victim.role);
   const variants = [
-    `<@${victim.user_id}> was killed during the night. They were ${summary}.`,
-    `By morning, <@${victim.user_id}> is found dead. They were ${summary}.`,
-    `<@${victim.user_id}> did not survive the night. They were ${summary}.`,
+    `<@${victim.user_id}> was killed by the wolves during the night. They were ${summary}.`,
+    `By morning, <@${victim.user_id}> is found dead with clear signs of a wolf attack. They were ${summary}.`,
+    `<@${victim.user_id}> did not survive the night — the wolves claimed them. They were ${summary}.`,
   ];
   return pickRandom(variants);
 }
@@ -385,9 +385,9 @@ export function chemistTargetDeathLine(victimId: string): string {
 
 export function serialKillerVictimDeathLine(victimId: string): string {
   const variants = [
-    `<@${victimId}> is found in a quiet corner, the ground dark with blood and no wolf tracks in sight.`,
-    `At dawn, the village discovers <@${victimId}>'s body hidden away from the main paths — killed cleanly by an unseen hand.`,
-    `There are no signs of fire or fangs around <@${victimId}>'s corpse, only careful stab wounds. A lone killer has been at work.`,
+    `<@${victimId}> is found in a quiet corner, the ground dark with blood and no wolf tracks in sight — the Serial Killer struck in the dark.`,
+    `At dawn, the village discovers <@${victimId}>'s body hidden away from the main paths, the wounds too clean for wolves. Everyone whispers about the Serial Killer.`,
+    `There are no signs of fire or fangs around <@${victimId}>'s corpse, only careful stab wounds. It looks like the Serial Killer has been at work.`,
   ];
   return pickRandom(variants);
 }
@@ -450,9 +450,9 @@ export function arsonistFireAwayDeathLine(victimId: string): string {
 
 export function wolfStabbedBySerialKillerLine(wolfId: string): string {
   const variants = [
-    `One of the wolves did not return from the hunt. <@${wolfId}> is found torn open by **knives**, not claws.`,
-    `The pack’s ranks are thinner this morning. <@${wolfId}>'s body bears deep stab wounds — someone turned the hunt around on them.`,
-    `Rumor spreads that a wolf died in the night, not by fire or villagers, but by cold, precise stab wounds. <@${wolfId}> will howl no more.`,
+    `One of the wolves did not return from the hunt. <@${wolfId}> is found torn open by **knives**, not claws — the Serial Killer fought back.`,
+    `The pack’s ranks are thinner this morning. <@${wolfId}>'s body bears deep stab wounds — whoever they hunted turned out to be the Serial Killer.`,
+    `Rumor spreads that a wolf died in the night, not by fire or villagers, but by cold, precise stab wounds. <@${wolfId}> crossed paths with the Serial Killer and will howl no more.`,
   ];
   return pickRandom(variants);
 }

@@ -1,7 +1,7 @@
 import type { NightActionRow } from '../../db/nightActions.js';
 import type { GamePlayerState } from '../../db/players.js';
 import { markPlayerDead, setPlayerRoleAndAlignment } from '../../db/players.js';
-import { WOLF_PACK_ROLES, type RoleName, type Alignment, type NightActionKind, type NightDeathInfo } from '../types.js';
+import { WOLF_PACK_ROLES, type RoleName, type Alignment, type NightDeathInfo } from '../types.js';
 import { ROLE_REGISTRY } from '../balancing/roleRegistry.js';
 import { chooseKillVictim, type HarlotVisit } from './nightResolution.js';
 import { openDmChannel, postChannelMessage } from '../../utils.js';
@@ -40,7 +40,6 @@ import {
   alphaWolfTurnedPackLine,
   thiefNewRoleDmLine,
   thiefTargetDmLine,
-  inspectedTargetDmLine,
   cultConvertedDmLine,
   cultNewMemberNotifyDmLine,
   cultWolfImmuneDmLine,
@@ -72,14 +71,16 @@ function buildPlayersById(players: GamePlayerState[]): Map<string, GamePlayerSta
   return map;
 }
 
-// Only Harlot "visiting" makes a player count as away from home.
-const AWAY_ACTION_KINDS: NightActionKind[] = ['visit'];
-
+// Harlot "visiting" and Serial Killer "killing" make a player count as away
+// from home (wolves targeting them that night will miss).
 export function buildAwayPlayerIds(actions: NightActionRow[]): Set<string> {
   const away = new Set<string>();
   for (const action of actions) {
     if (!action.target_id) continue;
-    if (AWAY_ACTION_KINDS.includes(action.action_kind)) {
+    if (
+      action.action_kind === 'visit' ||
+      (action.action_kind === 'kill' && action.role === 'serial_killer')
+    ) {
       away.add(action.actor_id);
     }
   }
@@ -151,9 +152,6 @@ export async function processSeerActions(
       }
 
       await safeDm(action.actor_id, content, 'seer inspection result');
-      if (action.actor_id !== target.user_id) {
-        await safeDm(target.user_id, inspectedTargetDmLine(), 'seer inspection target');
-      }
     }),
   );
 }
@@ -483,7 +481,7 @@ export async function processArsonistActions(
       // cult hunter) are not considered physically present in the house.
       for (const a of actions) {
         if (
-          AWAY_ACTION_KINDS.includes(a.action_kind) &&
+          a.action_kind === 'visit' &&
           a.target_id === houseId
         ) {
           if (!burnedKinds.has(a.actor_id) && !killedIds.includes(a.actor_id)) {
@@ -974,12 +972,6 @@ export async function processSerialKillerActions(
     (p) => p.is_alive && p.role === 'serial_killer',
   );
   if (!serialKiller) return { killedIds: killedBySerialKiller };
-
-  // If the Serial Killer already died earlier this night (e.g. to wolves,
-  // arsonist, or a duel), they don't get to complete their own kill.
-  if (killedIds.includes(serialKiller.user_id)) {
-    return { killedIds: killedBySerialKiller };
-  }
 
   const action = actions.find(
     (a) =>

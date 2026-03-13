@@ -388,6 +388,12 @@ export async function maybeResolveNight(gameId: string): Promise<void> {
           doctorSavedSomeone,
           cultConverted,
         );
+        // If the hunter was the only death, filteredNightDeaths is empty and
+        // buildNightSummaryLines returns "no deaths." Replace that with the
+        // dawn intro since someone (the hunter) did in fact die.
+        if (filteredNightDeaths.length === 0) {
+          lines[0] = dawnIntroLine();
+        }
         // Call out the Hunter's final stand before listing the full night summary.
         lines.splice(1, 0, hunterTriggerLine(), hunterResolveLine());
         if (biteConvertedId) lines.push(alphaWolfBiteChannelLine());

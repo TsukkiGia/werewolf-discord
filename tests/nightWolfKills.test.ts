@@ -33,6 +33,13 @@ vi.mock('../db.js', () => ({
   getLovers: getLoversMock,
 }));
 
+// nightActionProcessors imports markPlayerDead directly from db/players.js,
+// so we need to mock that path too to capture kills.
+vi.mock('../db/players.js', () => ({
+  markPlayerDead: markPlayerDeadMock,
+  setPlayerRoleAndAlignment: vi.fn(),
+}));
+
 const sentMessages: { channelId: string; content: string }[] = [];
 
 const openDmChannelMock = vi.fn((userId: string) =>
@@ -134,9 +141,7 @@ describe('maybeResolveNight — wolf kills with home/away and visitors', () => {
     ];
 
     // First call (pre-resolution) and second call (post-kills) both see same players
-    getPlayersForGameMock
-      .mockResolvedValueOnce(players)
-      .mockResolvedValueOnce(players);
+    getPlayersForGameMock.mockResolvedValue(players);
 
     const actions: NightActionRow[] = [
       // Wolf targets v
@@ -189,9 +194,7 @@ describe('maybeResolveNight — wolf kills with home/away and visitors', () => {
       makePlayer({ user_id: 'chem', role: 'chemist', alignment: 'town' }),
     ];
 
-    getPlayersForGameMock
-      .mockResolvedValueOnce(players)
-      .mockResolvedValueOnce(players);
+    getPlayersForGameMock.mockResolvedValue(players);
 
     const actions: NightActionRow[] = [
       // Wolf kills v
@@ -252,9 +255,7 @@ describe('maybeResolveNight — wolves vs Serial Killer', () => {
       }),
     ];
 
-    getPlayersForGameMock
-      .mockResolvedValueOnce(players)
-      .mockResolvedValueOnce(players);
+    getPlayersForGameMock.mockResolvedValue(players);
 
     const actions: NightActionRow[] = [
       // Wolf targets the Serial Killer at home.
@@ -306,9 +307,7 @@ describe('maybeResolveNight — wolves vs Serial Killer', () => {
       }),
     ];
 
-    getPlayersForGameMock
-      .mockResolvedValueOnce(players)
-      .mockResolvedValueOnce(players);
+    getPlayersForGameMock.mockResolvedValue(players);
 
     const actions: NightActionRow[] = [
       makeAction({
@@ -360,9 +359,7 @@ describe('maybeResolveNight — wolves vs Serial Killer', () => {
       makePlayer({ user_id: 'v', role: 'villager', alignment: 'town' }),
     ];
 
-    getPlayersForGameMock
-      .mockResolvedValueOnce(players)
-      .mockResolvedValueOnce(players);
+    getPlayersForGameMock.mockResolvedValue(players);
 
     const actions: NightActionRow[] = [
       // Wolf hunts the Serial Killer.
