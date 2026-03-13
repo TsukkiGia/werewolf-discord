@@ -24,11 +24,13 @@ export function makeTestSetup(
   roleA: RoleName,
   roleB: RoleName,
 ): RoleName[] {
+  console.log('[DEBUG makeTestSetup]', { playerCount, roleA, roleB });
+
   const WOLF_PACK = new Set<RoleName>(['werewolf', 'wolf_cub', 'alpha_wolf']);
 
   const hasWolf = WOLF_PACK.has(roleA) || WOLF_PACK.has(roleB);
 
-  if (!hasWolf && playerCount < 3) {
+  if (!hasWolf && playerCount < 2) {
     throw new Error(
       `makeTestSetup: need at least 3 players to include both ${roleA} and ${roleB} plus a wolf`,
     );

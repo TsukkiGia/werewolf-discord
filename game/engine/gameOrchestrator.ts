@@ -80,6 +80,7 @@ import {
   loversWinAloneLine,
   loversAlsoWinLine,
   loverSorrowDeathLine,
+  loverSorrowDeathDmLine,
   wolfCubDeathPackLine,
   thiefStoleLine,
   cultGainedMemberLine,
@@ -143,7 +144,7 @@ async function applyLoverSorrowDeaths(
   try {
     const dmChannelId = await openDmChannel(survivor.user_id);
     await postChannelMessage(dmChannelId, {
-      content: loverSorrowDeathLine(survivor.user_id, partner.user_id),
+      content: loverSorrowDeathDmLine(partner.user_id),
     });
   } catch (err) {
     console.error('Failed to DM lover sorrow death', gameId, survivor.user_id, err);
@@ -451,6 +452,23 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
     playersById.set(p.user_id, p);
   }
 
+  const arsonistHomeVictims: GamePlayerState[] = [];
+  const arsonistAwayVictims: GamePlayerState[] = [];
+  for (const death of nightDeaths) {
+    if (death.cause === 'arsonist_fire_home' || death.cause === 'arsonist_fire_away') {
+      const victim = playersById.get(death.playerId);
+      if (!victim) continue;
+      if (death.cause === 'arsonist_fire_home') {
+        arsonistHomeVictims.push(victim);
+      } else {
+        arsonistAwayVictims.push(victim);
+      }
+    }
+  }
+  const totalArsonistVictims =
+    arsonistHomeVictims.length + arsonistAwayVictims.length;
+  let arsonistSummarized = false;
+
   for (const death of nightDeaths) {
     switch (death.cause) {
       case 'wolf_kill': {
@@ -511,23 +529,41 @@ function buildNightDeathLines(nightDeaths: NightDeathInfo[], players: GamePlayer
         break;
       }
       case 'arsonist_fire_home': {
-        const victim = playersById.get(death.playerId);
-        if (victim) {
+        if (arsonistSummarized) break;
+        if (totalArsonistVictims === 1) {
+          const onlyVictim = arsonistHomeVictims[0] ?? arsonistAwayVictims[0]!;
+          const baseLine =
+            arsonistHomeVictims.length === 1
+              ? arsonistFireHomeDeathLine(onlyVictim.user_id)
+              : arsonistFireAwayDeathLine(onlyVictim.user_id);
           lines.push(
-            arsonistFireHomeDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
+            baseLine +
+              ` They were ${deathSummary(onlyVictim.alignment, onlyVictim.role)}.`,
+          );
+        } else if (totalArsonistVictims > 1) {
+          const allVictims: GamePlayerState[] = [
+            ...arsonistHomeVictims,
+            ...arsonistAwayVictims,
+          ];
+          const parts = allVictims.map(
+            (v) =>
+              `<@${v.user_id}> (${deathSummary(v.alignment, v.role)})`,
+          );
+          let list: string;
+          if (parts.length === 2) {
+            list = parts.join(' and ');
+          } else {
+            list = `${parts.slice(0, -1).join(', ')}, and ${parts[parts.length - 1]}`;
+          }
+          lines.push(
+            `In the fires, ${list} were caught in the blaze and killed.`,
           );
         }
+        arsonistSummarized = true;
         break;
       }
       case 'arsonist_fire_away': {
-        const victim = playersById.get(death.playerId);
-        if (victim) {
-          lines.push(
-            arsonistFireAwayDeathLine(victim.user_id) +
-              ` They were ${deathSummary(victim.alignment, victim.role)}.`,
-          );
-        }
+        // Handled together with 'arsonist_fire_home' to avoid repetitive lines.
         break;
       }
       case 'lover_sorrow': {

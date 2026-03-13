@@ -109,8 +109,8 @@ export function doctorQuietWatchTargetLine(): string {
 
 export function hunterTriggerLine(): string {
   const variants = [
-    'As steel and claws close in, the Hunter staggers — but something fierce lights up behind their eyes.',
-    'The Hunter falls under the night’s assault, yet even as they hit the ground their gaze hardens with one last purpose.',
+    'The Hunter stumbles, but something fierce lights up behind their eyes.',
+    'The Hunter falls, yet even as they hit the ground their gaze hardens with one last purpose.',
     'Wounds bloom across the Hunter’s body, but their grip tightens on their weapon. This isn’t over yet.',
   ];
   return pickRandom(variants);
@@ -420,20 +420,30 @@ export function loverSorrowDeathLine(victimId: string, partnerId: string | undef
   return pickRandom(variants);
 }
 
+export function loverSorrowDeathDmLine(partnerId: string | undefined): string {
+  const partnerMention = partnerId ? `<@${partnerId}>` : 'your lost lover';
+  const variants = [
+    `You cannot bear life without ${partnerMention}. Your heart breaks, and you die in sorrow.`,
+    `Grief proves fatal. After ${partnerMention} falls, you feel something inside you give way — you slip away in heartbreak.`,
+    `You cling to ${partnerMention}'s lifeless body until your own heart finally gives out. You have died of heartbreak.`,
+  ];
+  return pickRandom(variants);
+}
+
 export function arsonistFireHomeDeathLine(victimId: string): string {
   const variants = [
-    `<@${victimId}> is found in a charred ruin, the house burned to the ground in an unnatural blaze.`,
-    `Only scorched beams remain where <@${victimId}>'s home once stood. Their body is recovered from the ashes.`,
-    `The village wakes to a roaring fire that has already done its work — <@${victimId}> burned with their home.`,
+    `One of the burning houses was <@${victimId}>'s. They never made it out of the flames.`,
+    `Amid the fires, <@${victimId}>'s home collapses in embers — their body is recovered from the ash.`,
+    `<@${victimId}> is counted among the victims found in the charred ruins of their own home.`,
   ];
   return pickRandom(variants);
 }
 
 export function arsonistFireAwayDeathLine(victimId: string): string {
   const variants = [
-    `<@${victimId}> is found near the smoldering remains of their home, the shock of returning to a burned-out shell written on their face.`,
-    `By dawn, <@${victimId}>'s house is a blackened shell — and <@${victimId}> lies dead nearby, never having made it inside before the blaze consumed everything.`,
-    `The village wakes to the smell of ash. <@${victimId}>'s home is gone, and so is <@${victimId}> — the fire claimed them when they came back to nothing but ruin.`,
+    `In the chaos around the burning houses, <@${victimId}> is found near the ruins of their home — another victim of the blaze.`,
+    `By dawn, <@${victimId}>'s house is a blackened shell, and <@${victimId}> lies dead nearby, claimed by the same inferno.`,
+    `The village wakes to smoke and soot. <@${victimId}> is discovered near the ashes of their home — one more life taken by the fires.`,
   ];
   return pickRandom(variants);
 }
